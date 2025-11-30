@@ -1,0 +1,6 @@
+openrouter
+supabase
+python-dotenv
+tqdm
+streamlit
+requests
