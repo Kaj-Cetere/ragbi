@@ -21,9 +21,10 @@ This plan implements **Contextual Retrieval** (as pioneered by Anthropic) for th
 ```
 
 ### Key Points
-- **chunk_index** enables neighbor lookups (5 before, 2 after)
-- **metadata.siman** allows us to check siman boundaries
+- **chunk_index** enables neighbor lookups
+- **metadata.siman** and **metadata.book** allow us to check siman boundaries within each of the 4 books
 - Gemini embeddings already use `halfvec(3072)` for better performance
+- **4 Books:** Orach Chayim, Yoreh Deah, Choshen Mishpat, Even HaEzer (each has its own simanim)
 
 ---
 
@@ -48,36 +49,75 @@ ALTER TABLE sefaria_text_chunks
 ADD COLUMN IF NOT EXISTS embedding_gemini_contextual halfvec(3072);  -- New embedding
 
 -- Create HNSW index for contextual embeddings
+-- Optimized parameters for large 3072-dimension embeddings:
+--   m = 24 (more connections per node for high-dim vectors)
+--   ef_construction = 96 (higher quality graph construction)
 CREATE INDEX IF NOT EXISTS idx_embedding_gemini_contextual 
 ON sefaria_text_chunks 
 USING hnsw (embedding_gemini_contextual halfvec_cosine_ops)
-WITH (m = 16, ef_construction = 64);
+WITH (m = 24, ef_construction = 96);
+
+-- Note: At query time, set ef_search for better recall:
+-- SET LOCAL hnsw.ef_search = 60;
 ```
 
 ### Phase 2: Context Generation Logic
 
-#### 2.1 Gathering Surrounding Context
+#### 2.1 Context Strategy (Prompt Caching Optimized)
 
-For each seif, gather:
-- **5 chunks before** (if available and same siman)
-- **2 chunks after** (if available and same siman)
-- **Current chunk** (the target seif)
+**Key Insight:** To maximize prompt caching benefits, neighboring seifim should share the same context. This reduces API costs significantly.
 
-**Siman boundary rules:**
-- If a surrounding chunk is from a different siman, exclude it (it's unrelated)
-- If surrounding chunks span multiple simanim, only include chunks from the same siman
-- This ensures the LLM receives only relevant halakhic context
+**Strategy:**
+
+| Siman Size | Context Strategy | Cache Benefit |
+|------------|------------------|---------------|
+| ≤ 15 seifim | Use **entire siman** as context for all seifim | 100% cache hit after first seif |
+| > 15 seifim | **Group seifim into batches of 5**, each batch shares a context window | ~80% cache hit |
+
+**For Large Simanim (> 15 seifim) - Two Options:**
+
+**Option A: Fixed Groups of 5 (Recommended)**
+- Seifim 1-5 share context: [seifim 1-7]
+- Seifim 6-10 share context: [seifim 4-12]  
+- Seifim 11-15 share context: [seifim 9-17]
+- etc.
+
+**Option B: Sliding Window with Batch Reuse**
+- Process in order, reuse same prompt for 5 consecutive seifim
+- Advance window by 5 seifim at a time
+
+**Book-Aware Processing:**
+Each of the 4 books (Orach Chayim, Yoreh Deah, Choshen Mishpat, Even HaEzer) must be processed independently:
+- Siman 1 in Orach Chayim ≠ Siman 1 in Yoreh Deah
+- Context must NEVER cross book boundaries
+- Use `metadata.book` to filter correctly
 
 **Implementation:**
 ```python
-def get_surrounding_context(chunk_index: int, siman: int, book: str) -> dict:
+def get_context_for_seif(book: str, siman: int, seif: int, all_seifim_in_siman: list) -> str:
     """
-    Fetch surrounding chunks for context, respecting siman boundaries.
-    Returns: { "before": [...], "current": {...}, "after": [...] }
+    Get context for a seif, optimized for prompt caching.
+    
+    Args:
+        book: e.g., "Shulchan Arukh, Orach Chayim"
+        siman: Siman number
+        seif: Seif number within siman
+        all_seifim_in_siman: List of all seifim in this siman
+    
+    Returns:
+        Context string (entire siman or windowed subset)
     """
-    # Query chunks with chunk_index in range [current-5, current+2]
-    # Filter to same book and same siman
-    pass
+    total_seifim = len(all_seifim_in_siman)
+    
+    if total_seifim <= 15:
+        # Small siman: use entire siman as context
+        return format_siman_context(all_seifim_in_siman)
+    else:
+        # Large siman: use windowed context based on seif's group
+        group_index = (seif - 1) // 5  # Which group of 5 this seif belongs to
+        window_start = max(0, group_index * 5 - 2)  # 2 seifim padding before
+        window_end = min(total_seifim, (group_index + 1) * 5 + 2)  # 2 seifim padding after
+        return format_siman_context(all_seifim_in_siman[window_start:window_end])
 ```
 
 #### 2.2 Context Generation Prompt (Hebrew)
@@ -86,9 +126,9 @@ Since the output must be in Hebrew, the prompt will be in Hebrew:
 
 ```python
 CONTEXTUAL_PROMPT_HEBREW = """
-<הקשר>
-{SURROUNDING_CHUNKS}
-</הקשר>
+<הסימן>
+{SIMAN_CONTEXT}
+</הסימן>
 
 <סעיף_נוכחי>
 {CURRENT_SEIF}
@@ -97,16 +137,21 @@ CONTEXTUAL_PROMPT_HEBREW = """
 תן הסבר קצר וענייני (משפט אחד עד שניים) המתאר את תפקיד הסעיף הנוכחי בהקשר ההלכתי הרחב יותר של הסימן. 
 ההסבר צריך לעזור בחיפוש ואחזור המידע - ציין את הנושא ההלכתי, ואם רלוונטי, את הקשר לסעיפים סביבו.
 ענה רק עם ההסבר הקצר ללא שום הקדמה או סיום.
+
+דוגמה לפלט רצוי:
+"סעיף זה עוסק בדיני קידוש בליל שבת, ומפרט את נוסח הברכה על היין לפני הקידוש עצמו."
 """
 ```
 
-**Example output:**
-> סעיף זה עוסק בדיני קידוש בליל שבת, ומפרט את נוסח הברכה על היין לפני הקידוש עצמו.
+**Note on Prompt Caching:**
+- The `<הסימן>` section remains constant for all seifim in same context group
+- Only `<סעיף_נוכחי>` changes between requests
+- This enables significant cache hits on the context portion
 
 #### 2.3 LLM Configuration
 
 - **Model:** `x-ai/grok-4.1-fast` via OpenRouter
-- **Temperature:** 0.3 (low for consistency)
+- **Temperature:** 0.3 (balanced for consistency with slight flexibility)
 - **Max tokens:** 150 (context should be 50-100 tokens)
 
 ### Phase 3: Re-Embedding with Gemini
@@ -162,20 +207,29 @@ $$;
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     CONTEXTUAL EMBEDDING PIPELINE                    │
+│                  (Per Book: OC, YD, CM, EH separately)               │
 └─────────────────────────────────────────────────────────────────────┘
 
-Step 1: Gather Context
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│  5 chunks   │    │   Current   │    │  2 chunks   │
-│   before    │ ─▶ │    Seif     │ ◀─ │   after     │
-│ (same siman)│    │             │    │ (same siman)│
-└─────────────┘    └─────────────┘    └─────────────┘
+Step 0: Group by Book → Siman
+┌─────────────────────────────────────────────────────────────────────┐
+│  For each book (OC, YD, CM, EH):                                     │
+│    For each siman in book:                                           │
+│      Determine context strategy (full siman vs windowed)             │
+└─────────────────────────────────────────────────────────────────────┘
                           │
                           ▼
-Step 2: Generate Context (Grok 4.1 Fast)
+Step 1: Gather Context (Cache-Optimized)
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Prompt (Hebrew):                                                    │
-│  "תן הסבר קצר... על תפקיד הסעיף בהקשר ההלכתי..."                      │
+│  Small Siman (≤15):     Use entire siman for all seifim             │
+│  Large Siman (>15):     Use windowed context, shared per 5 seifim   │
+└─────────────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+Step 2: Generate Context (Grok 4.1 Fast) - WITH PROMPT CACHING
+┌─────────────────────────────────────────────────────────────────────┐
+│  <הסימן> ... </הסימן>           ← CACHED (same for seif group)       │
+│  <סעיף_נוכחי> ... </סעיף_נוכחי>  ← VARIES (unique per seif)          │
+│  "תן הסבר קצר..."                                                    │
 └─────────────────────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -219,19 +273,26 @@ After processing, compare retrieval quality:
 
 ## 5. Cost & Performance Estimates
 
-### 5.1 Context Generation (Grok 4.1 Fast)
-- **Input:** ~500 tokens per chunk (surrounding context + current seif)
-- **Output:** ~100 tokens (context explanation)
-- **For 300 chunks:** ~180K input tokens, ~30K output tokens
+### 5.1 Context Generation (Grok 4.1 Fast) - With Prompt Caching
+
+**Without caching:**
+- Input: ~500 tokens per chunk (siman context + current seif)
+- Output: ~100 tokens (context explanation)
+- For 300 chunks: ~150K input tokens, ~30K output tokens
+
+**With prompt caching (estimated savings):**
+- Small simanim (≤15 seifim): ~90% cache hit on context portion
+- Large simanim (>15 seifim): ~80% cache hit per group of 5
+- **Estimated effective input:** ~30-50K tokens (vs 150K without caching)
 
 ### 5.2 Embedding (Gemini)
 - **Input:** ~400 tokens per contextualized chunk
 - **For 300 chunks:** ~120K tokens
 
 ### 5.3 Time Estimate
-- Context generation: ~1-2 seconds per chunk × 300 = ~5-10 minutes
+- Context generation: ~0.5-1 second per chunk (faster with cache) × 300 = ~3-5 minutes
 - Embedding: ~0.5 seconds per batch of 100 × 3 batches = ~1.5 minutes
-- **Total estimated time:** ~10-15 minutes for 300 chunks
+- **Total estimated time:** ~5-7 minutes for 300 chunks (with caching)
 
 ---
 
@@ -267,8 +328,9 @@ After successful testing with 300 chunks:
 - Estimated time: proportional to total chunks
 
 ### 8.2 Caching/Optimization
-- Consider prompt caching if OpenRouter/Grok supports it
-- Batch embedding requests (already implemented for Gemini)
+- **Prompt caching:** Implemented via shared context strategy
+- **Batch embedding requests:** Already implemented for Gemini
+- **Processing order:** Process simanim sequentially to maximize cache locality
 
 ### 8.3 Display Considerations
 When presenting to users:
@@ -278,12 +340,17 @@ When presenting to users:
 
 ---
 
-## 9. Questions for Review
+## 9. Resolved Questions
 
-1. **Separator choice:** Is `\n\n---\n\n` appropriate, or prefer something else?
-2. **Context length:** 5 before + 2 after - should this be adjusted?
-3. **Siman boundary:** Strict (only same siman) or allow 1 chunk from adjacent siman?
-4. **Temperature:** 0.3 for context generation - should it be lower (0.1) for more deterministic output?
+1. ✅ **Separator choice:** `\n\n---\n\n` approved
+2. ✅ **Context strategy:** Cache-optimized (full siman for ≤15, windowed groups of 5 for >15)
+3. ✅ **Book boundaries:** Strict (never cross books, process OC/YD/CM/EH separately)
+4. ✅ **Index optimization:** m=24, ef_construction=96, ef_search=60
+
+## 10. Remaining Questions
+
+1. ✅ **Large siman strategy:** Option A (fixed groups) - better context at boundaries
+2. ✅ **Temperature:** Keep at 0.3 for balanced consistency and slight flexibility
 
 ---
 
@@ -293,4 +360,5 @@ When presenting to users:
 - [ ] Hebrew prompt reviewed
 - [ ] Cost estimates acceptable
 - [ ] Test scope (300 chunks) approved
+- [ ] Large siman strategy chosen (Option A)
 - [ ] Ready to proceed with implementation

@@ -37,6 +37,11 @@ EMBEDDING_MODELS = {
         "model": "google/gemini-embedding-001",
         "dimensions": 3072,
         "rpc_function": "match_sefaria_chunks_gemini"
+    },
+    "Gemini Contextual (3072d)": {
+        "model": "google/gemini-embedding-001",
+        "dimensions": 3072,
+        "rpc_function": "match_sefaria_chunks_gemini_contextual"
     }
 }
 
@@ -425,6 +430,13 @@ with st.sidebar:
     
     st.divider()
     
+    # Comparison mode toggle
+    comparison_mode = st.toggle(
+        "🔬 Comparison Mode",
+        value=False,
+        help="Compare regular vs contextual embeddings side-by-side"
+    )
+    
     show_sources = st.checkbox("Show source chunks", value=True)
     show_commentaries = st.checkbox("Show commentaries detail", value=True)
 
@@ -440,106 +452,174 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Helper function to process chunks into hydrated format
+def process_chunks_to_hydrated(chunks: list[dict]) -> list[dict]:
+    """Convert raw chunks to hydrated format (without actual hydration)."""
+    hydrated = []
+    for i, chunk in enumerate(chunks):
+        metadata = chunk.get("metadata", {})
+        hydrated.append({
+            "rank": i + 1,
+            "ref": chunk.get("sefaria_ref", ""),
+            "content": chunk.get("content", ""),
+            "context_text": chunk.get("context_text", ""),  # Include context if available
+            "similarity": chunk.get("similarity", 0),
+            "book": metadata.get("book", ""),
+            "siman": metadata.get("siman"),
+            "seif": metadata.get("seif"),
+            "commentaries": [],
+            "hydrated": False
+        })
+    return hydrated
+
 # Chat input
 if prompt := st.chat_input("Ask a question about Halakha..."):
     # Add user message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Start overall query timing
-    query_start_time = time.time()
-    logger.info(f"🚀 Starting new query: '{prompt[:50]}...' using {embedding_choice}")
-    
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    with st.chat_message("assistant"):
-        with st.spinner(f"Searching with {embedding_choice}..."):
-            # Step 1: Generate query embedding
-            embedding_start = time.time()
-            embedding = get_query_embedding(prompt, selected_model)
-            embedding_time = time.time() - embedding_start
+    # COMPARISON MODE: Side-by-side comparison
+    if comparison_mode:
+        st.markdown("### 🔬 Comparison: Regular vs Contextual Embeddings")
+        
+        # Generate embedding once (same for both searches)
+        gemini_model = EMBEDDING_MODELS["Gemini (3072d)"]
+        with st.spinner("Generating query embedding..."):
+            embedding = get_query_embedding(prompt, gemini_model)
+        
+        if embedding:
+            col1, col2 = st.columns(2)
             
-            if embedding:
-                # Step 2: Search for similar chunks
-                search_start = time.time()
-                chunks = search_chunks(embedding, selected_model["rpc_function"])
-                search_time = time.time() - search_start
+            # LEFT COLUMN: Regular Gemini
+            with col1:
+                st.markdown("#### 📊 Regular Gemini")
+                with st.spinner("Searching..."):
+                    chunks_regular = search_chunks(embedding, "match_sefaria_chunks_gemini")
                 
-                if chunks:
-                    # Step 3: Skip commentary hydration for faster testing
-                    # hydrated = hydrate_chunks(chunks)
+                if chunks_regular:
+                    hydrated_regular = process_chunks_to_hydrated(chunks_regular)
+                    context_regular = build_context_prompt(hydrated_regular)
                     
-                    # Use raw chunks directly
-                    hydration_start = time.time()
-                    hydrated = []
-                    for i, chunk in enumerate(chunks):
-                        metadata = chunk.get("metadata", {})
-                        hydrated.append({
-                            "rank": i + 1,
-                            "ref": chunk.get("sefaria_ref", ""),
-                            "content": chunk.get("content", ""),
-                            "similarity": chunk.get("similarity", 0),
-                            "book": metadata.get("book", ""),
-                            "siman": metadata.get("siman"),
-                            "seif": metadata.get("seif"),
-                            "commentaries": [],  # No commentaries
-                            "hydrated": False     # Mark as not hydrated
-                        })
-                    hydration_time = time.time() - hydration_start
+                    response_placeholder_1 = st.empty()
+                    full_response_1 = ""
+                    for chunk in generate_response_stream(prompt, context_regular):
+                        full_response_1 += chunk
+                        response_placeholder_1.markdown(full_response_1 + "▌")
+                    response_placeholder_1.markdown(full_response_1)
                     
-                    st.session_state.retrieved_chunks = hydrated
-                    
-                    # Step 4: Build context (without commentaries)
-                    context_start = time.time()
-                    context = build_context_prompt(hydrated)
-                    context_time = time.time() - context_start
-                    
-                    # Step 5: Generate response (streaming)
-                    generation_start = time.time()
-                    response_placeholder = st.empty()
-                    full_response = ""
-                    
-                    for chunk in generate_response_stream(prompt, context):
-                        full_response += chunk
-                        response_placeholder.markdown(full_response + "▌")
-                    
-                    response_placeholder.markdown(full_response)
-                    generation_time = time.time() - generation_start
-                    
-                    # Store assistant response
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": full_response
-                    })
-                    
-                    # Overall performance summary
-                    total_query_time = time.time() - query_start_time
-                    logger.info(f"📊 QUERY PERFORMANCE SUMMARY:")
-                    logger.info(f"  🔍 Embedding generation: {embedding_time:.3f}s ({embedding_time/total_query_time*100:.1f}%)")
-                    logger.info(f"  🔎 Vector search: {search_time:.3f}s ({search_time/total_query_time*100:.1f}%)")
-                    logger.info(f"  📝 Context building: {context_time:.3f}s ({context_time/total_query_time*100:.1f}%)")
-                    logger.info(f"  ⚡ LLM generation: {generation_time:.3f}s ({generation_time/total_query_time*100:.1f}%)")
-                    logger.info(f"  🔄 Chunk processing: {hydration_time:.3f}s ({hydration_time/total_query_time*100:.1f}%)")
-                    logger.info(f"  🎯 TOTAL QUERY TIME: {total_query_time:.3f}s")
-                    logger.info(f"  📈 Retrieved {len(chunks)} chunks, generated {len(full_response)} chars response")
-                    
-                    # Show sources if enabled
-                    if show_sources and hydrated:
-                        with st.expander("📚 View Sources", expanded=False):
-                            for chunk in hydrated:
-                                icon = "📄"  # Always show as regular chunk (no hydration)
-                                st.markdown(f"**{icon} {chunk['ref']}** (Similarity: {chunk['similarity']:.2f})")
-                                st.text(chunk['content'][:300] + "..." if len(chunk['content']) > 300 else chunk['content'])
-                                
-                                # Commentaries section commented out for faster testing
-                                # if show_commentaries and chunk['commentaries']:
-                                #     for comm in chunk['commentaries']:
-                                #         st.markdown(f"  - *{comm['commentator']}*: {comm['text'][:200]}...")
+                    if show_sources:
+                        with st.expander("📚 Sources", expanded=False):
+                            for chunk in hydrated_regular:
+                                st.markdown(f"**{chunk['ref']}** ({chunk['similarity']:.2f})")
+                                st.text(chunk['content'][:200] + "...")
                                 st.divider()
                 else:
-                    st.warning("No matching sources found. Try rephrasing your question.")
-            else:
-                st.error("Failed to generate query embedding.")
+                    st.warning("No results found")
+            
+            # RIGHT COLUMN: Contextual Gemini
+            with col2:
+                st.markdown("#### 🧠 Contextual Gemini")
+                with st.spinner("Searching..."):
+                    chunks_contextual = search_chunks(embedding, "match_sefaria_chunks_gemini_contextual")
+                
+                if chunks_contextual:
+                    hydrated_contextual = process_chunks_to_hydrated(chunks_contextual)
+                    context_contextual = build_context_prompt(hydrated_contextual)
+                    
+                    response_placeholder_2 = st.empty()
+                    full_response_2 = ""
+                    for chunk in generate_response_stream(prompt, context_contextual):
+                        full_response_2 += chunk
+                        response_placeholder_2.markdown(full_response_2 + "▌")
+                    response_placeholder_2.markdown(full_response_2)
+                    
+                    if show_sources:
+                        with st.expander("📚 Sources (with context)", expanded=False):
+                            for chunk in hydrated_contextual:
+                                st.markdown(f"**{chunk['ref']}** ({chunk['similarity']:.2f})")
+                                if chunk.get('context_text'):
+                                    st.info(f"🧠 Context: {chunk['context_text']}")
+                                st.text(chunk['content'][:200] + "...")
+                                st.divider()
+                else:
+                    st.warning("No results (contextual embeddings may not be populated yet)")
+        else:
+            st.error("Failed to generate query embedding.")
+    
+    # NORMAL MODE: Single model search
+    else:
+        query_start_time = time.time()
+        logger.info(f"🚀 Starting new query: '{prompt[:50]}...' using {embedding_choice}")
+        
+        with st.chat_message("assistant"):
+            with st.spinner(f"Searching with {embedding_choice}..."):
+                # Step 1: Generate query embedding
+                embedding_start = time.time()
+                embedding = get_query_embedding(prompt, selected_model)
+                embedding_time = time.time() - embedding_start
+                
+                if embedding:
+                    # Step 2: Search for similar chunks
+                    search_start = time.time()
+                    chunks = search_chunks(embedding, selected_model["rpc_function"])
+                    search_time = time.time() - search_start
+                    
+                    if chunks:
+                        # Use raw chunks directly
+                        hydration_start = time.time()
+                        hydrated = process_chunks_to_hydrated(chunks)
+                        hydration_time = time.time() - hydration_start
+                        
+                        st.session_state.retrieved_chunks = hydrated
+                        
+                        # Step 4: Build context (without commentaries)
+                        context_start = time.time()
+                        context = build_context_prompt(hydrated)
+                        context_time = time.time() - context_start
+                        
+                        # Step 5: Generate response (streaming)
+                        generation_start = time.time()
+                        response_placeholder = st.empty()
+                        full_response = ""
+                        
+                        for chunk in generate_response_stream(prompt, context):
+                            full_response += chunk
+                            response_placeholder.markdown(full_response + "▌")
+                        
+                        response_placeholder.markdown(full_response)
+                        generation_time = time.time() - generation_start
+                        
+                        # Store assistant response
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": full_response
+                        })
+                        
+                        # Overall performance summary
+                        total_query_time = time.time() - query_start_time
+                        logger.info(f"📊 QUERY PERFORMANCE SUMMARY:")
+                        logger.info(f"  🔍 Embedding generation: {embedding_time:.3f}s ({embedding_time/total_query_time*100:.1f}%)")
+                        logger.info(f"  🔎 Vector search: {search_time:.3f}s ({search_time/total_query_time*100:.1f}%)")
+                        logger.info(f"  📝 Context building: {context_time:.3f}s ({context_time/total_query_time*100:.1f}%)")
+                        logger.info(f"  ⚡ LLM generation: {generation_time:.3f}s ({generation_time/total_query_time*100:.1f}%)")
+                        logger.info(f"  🔄 Chunk processing: {hydration_time:.3f}s ({hydration_time/total_query_time*100:.1f}%)")
+                        logger.info(f"  🎯 TOTAL QUERY TIME: {total_query_time:.3f}s")
+                        logger.info(f"  📈 Retrieved {len(chunks)} chunks, generated {len(full_response)} chars response")
+                        
+                        # Show sources if enabled
+                        if show_sources and hydrated:
+                            with st.expander("📚 View Sources", expanded=False):
+                                for chunk in hydrated:
+                                    icon = "📄"
+                                    st.markdown(f"**{icon} {chunk['ref']}** (Similarity: {chunk['similarity']:.2f})")
+                                    st.text(chunk['content'][:300] + "..." if len(chunk['content']) > 300 else chunk['content'])
+                                    st.divider()
+                    else:
+                        st.warning("No matching sources found. Try rephrasing your question.")
+                else:
+                    st.error("Failed to generate query embedding.")
 
 # Footer
 st.divider()
