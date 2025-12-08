@@ -2,6 +2,9 @@
  * API utilities for connecting to the FastAPI backend
  */
 
+// Add this at the top of the file
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export interface Source {
   rank: number;
   ref: string;
@@ -63,7 +66,7 @@ export async function* streamChat(
   query: string,
   useAgent: boolean = true
 ): AsyncGenerator<StreamEvent> {
-  const response = await fetch('/api/chat/stream', {
+  const response = await fetch(`${API_URL}/api/chat/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -112,11 +115,11 @@ export async function* streamChat(
  */
 export async function fetchSefariaText(ref: string): Promise<SefariaText> {
   const encodedRef = encodeURIComponent(ref);
-  const response = await fetch(`/api/sefaria/text/${encodedRef}`);
-  
+  const response = await fetch(`${API_URL}/api/sefaria/text/${encodedRef}`);
+
   if (!response.ok) {
     throw new Error(`Failed to fetch text: ${response.status}`);
   }
-  
+
   return response.json();
 }
