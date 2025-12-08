@@ -1,69 +1,121 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import styles from "./Loader.module.css";
 
 interface LoaderProps {
   text?: string;
 }
 
-export function Loader({ text = "Analyzing Sources..." }: LoaderProps) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 mb-5">
-      <div className="relative w-16 h-16">
-        {/* Center breathing orb */}
-        <motion.div
-          className="absolute top-1/2 left-1/2 w-4 h-4 rounded-full z-10"
-          style={{
-            x: "-50%",
-            y: "-50%",
-            backgroundColor: 'var(--color-accent-primary)',
-          }}
-          animate={{
-            scale: [1, 1.3, 1],
-            opacity: [0.8, 1, 0.8],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
+const msgs = [
+  { t: "Expanding Knowledge...", d: 0 },
+  { t: "Illuminating Connections...", d: 2500 },
+  { t: "Full Synthesis...", d: 6000 },
+  { t: "Converging...", d: 9000 }
+];
 
-        {/* Orbit 1 */}
-        <motion.div
-          className="absolute top-1/2 left-1/2 w-10 h-10 rounded-full"
-          style={{ border: '2px solid var(--color-accent-secondary)', opacity: 0.5, x: "-50%", y: "-50%" }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-        >
-          <div
-            className="absolute -top-0.5 left-1/2 w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: 'var(--color-accent-primary)' }}
-          />
-        </motion.div>
+export function Loader({ text }: LoaderProps) {
+  const [currentText, setCurrentText] = useState(text || msgs[0].t);
 
-        {/* Orbit 2 */}
-        <motion.div
-          className="absolute top-1/2 left-1/2 w-16 h-16 rounded-full"
-          style={{ border: '2px solid var(--color-accent-primary)', opacity: 0.3, x: "-50%", y: "-50%" }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        >
-          <div
-            className="absolute -top-0.5 left-1/2 w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: 'var(--color-accent-primary)' }}
-          />
-        </motion.div>
-      </div>
+  useEffect(() => {
+    // If text prop is provided, override the animation text
+    if (text) {
+      setCurrentText(text);
+      return;
+    }
 
-      <motion.p
-        className="text-xs font-semibold uppercase tracking-widest font-sans mt-8"
-        style={{ color: 'var(--color-text-light)' }}
-        animate={{ opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 1.5, repeat: Infinity }}
+    let timeouts: NodeJS.Timeout[] = [];
+    let interval: NodeJS.Timeout;
+
+    // Cycle the text
+    const cycleText = () => {
+        msgs.forEach((item) => {
+          const timeout = setTimeout(() => {
+            setCurrentText(item.t);
+          }, item.d);
+          timeouts.push(timeout);
+        });
+    }
+
+    cycleText();
+    // Restart cycle every 12s to match animation
+    interval = setInterval(() => {
+        cycleText();
+    }, 12000);
+
+    return () => {
+      timeouts.forEach(clearTimeout);
+      clearInterval(interval);
+    };
+  }, [text]);
+
+  const renderGen3 = () => {
+    const angles = [-25, 25];
+    return angles.map((ang, i) => (
+      <div
+        key={`g3-${i}`}
+        className={`${styles.limbWrapper} ${styles.g3Wrapper}`}
+        style={{ "--r": `${ang}deg` } as React.CSSProperties}
       >
-        {text}
-      </motion.p>
+        <div className={`${styles.extender} ${styles.g3Extender}`}>
+          <div className={styles.line}></div>
+          <div className={`${styles.orb} ${styles.g3Orb}`}></div>
+        </div>
+      </div>
+    ));
+  };
+
+  const renderGen2 = () => {
+    const angles = [-40, 0, 40];
+    return angles.map((ang, i) => (
+      <div
+        key={`g2-${i}`}
+        className={`${styles.limbWrapper} ${styles.g2Wrapper}`}
+        style={{ "--r": `${ang}deg` } as React.CSSProperties}
+      >
+        <div className={`${styles.extender} ${styles.g2Extender}`}>
+          <div className={styles.line}></div>
+          <div className={`${styles.orb} ${styles.g2Orb}`}></div>
+          {renderGen3()}
+        </div>
+      </div>
+    ));
+  };
+
+  const renderGen1 = () => {
+    const arms = Array.from({ length: 6 });
+    return arms.map((_, i) => {
+      const r1 = i * 60;
+      return (
+        <div
+          key={`g1-${i}`}
+          className={styles.limbWrapper}
+          style={{ "--r": `${r1}deg` } as React.CSSProperties}
+        >
+          <div className={`${styles.extender} ${styles.g1Extender}`}>
+            <div className={styles.line}></div>
+            <div className={`${styles.orb} ${styles.g1Orb}`}></div>
+            {renderGen2()}
+          </div>
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full overflow-hidden rounded-xl py-10 my-8">
+        <div className={styles.loaderWrapper}>
+            <div className={styles.constellationSystem}>
+                {/* Seed */}
+                <div className={`${styles.orb} ${styles.seed}`}></div>
+                {/* Tree */}
+                {renderGen1()}
+            </div>
+        </div>
+
+        <div className={styles.statusContainer}>
+            <div className={styles.statusText}>{currentText}</div>
+        </div>
     </div>
   );
 }

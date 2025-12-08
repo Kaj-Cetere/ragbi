@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import requests
+import httpx
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -46,7 +47,7 @@ EMBEDDING_DIMENSIONS = 3072
 RPC_FUNCTION = "match_sefaria_chunks_gemini_contextual"
 
 # Chat Model
-CHAT_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025"
+CHAT_MODEL = "x-ai/grok-4.1-fast"
 
 # RAG Settings
 TOP_K_RETRIEVE_FOR_RERANK = 50
@@ -254,7 +255,7 @@ def build_context_prompt(hydrated_chunks: list[dict]) -> str:
 
 
 async def generate_response_stream(query: str, context: str) -> AsyncIterator[str]:
-    """Generate streaming LLM response."""
+    """Generate streaming LLM response using async httpx."""
     system_prompt = """You are a knowledgeable assistant specializing in Torah texts, particularly the Shulchan Arukh and its classical commentaries.
 
 Your role is to:
@@ -280,41 +281,39 @@ Please provide a helpful, accurate response based on the sources above."""}
     ]
     
     try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://kesher.ai",
-                "X-Title": "Kesher AI"
-            },
-            json={
-                "model": CHAT_MODEL,
-                "messages": messages,
-                "temperature": 0.3,
-                "max_tokens": 2000,
-                "stream": True
-            },
-            stream=True,
-            timeout=120
-        )
-        response.raise_for_status()
-        
-        for line in response.iter_lines():
-            if line:
-                line = line.decode('utf-8')
-                if line.startswith('data: '):
-                    data = line[6:]
-                    if data == '[DONE]':
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if 'choices' in chunk and len(chunk['choices']) > 0:
-                            delta = chunk['choices'][0].get('delta', {})
-                            if 'content' in delta:
-                                yield delta['content']
-                    except json.JSONDecodeError:
-                        continue
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://kesher.ai",
+                    "X-Title": "Kesher AI"
+                },
+                json={
+                    "model": CHAT_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 2000,
+                    "stream": True
+                }
+            ) as response:
+                response.raise_for_status()
+                
+                async for line in response.aiter_lines():
+                    if line and line.startswith('data: '):
+                        data = line[6:]
+                        if data == '[DONE]':
+                            break
+                        try:
+                            chunk = json.loads(data)
+                            if 'choices' in chunk and len(chunk['choices']) > 0:
+                                delta = chunk['choices'][0].get('delta', {})
+                                if 'content' in delta:
+                                    yield delta['content']
+                        except json.JSONDecodeError:
+                            continue
                         
     except Exception as e:
         logger.error(f"❌ LLM error: {e}")
@@ -422,8 +421,10 @@ async def chat_stream(request: QueryRequest):
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+            "Content-Type": "text/event-stream",
         }
     )
 

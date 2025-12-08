@@ -13,13 +13,14 @@ import re
 import json
 import logging
 import requests
+import httpx
 from typing import AsyncIterator, Optional
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-CHAT_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025"
+CHAT_MODEL = "x-ai/grok-4.1-fast"
 
 
 @dataclass
@@ -98,15 +99,29 @@ def build_source_cache(hydrated_chunks: list[dict]) -> dict[str, SourceText]:
             seif=chunk.get("seif")
         )
         
-        # Also cache commentaries
+        # Also cache commentaries using their actual Sefaria refs
         for comm in chunk.get("commentaries", []):
-            comm_ref = f"{ref}:{comm.get('commentator', 'Commentary')}"
-            if comm_ref not in cache:
+            commentator = comm.get('commentator', 'Commentary')
+            comm_text = comm.get("text", "")
+            comm_ref = comm.get("ref", "")  # Actual Sefaria ref like "Mishnah Berurah 1:1"
+            
+            if comm_ref and comm_ref not in cache:
                 cache[comm_ref] = SourceText(
                     ref=comm_ref,
-                    hebrew=comm.get("text", ""),
+                    hebrew=comm_text,
                     english="",  # Commentaries often don't have translations
-                    book=comm.get("commentator", "")
+                    book=commentator
+                )
+            
+            # Also cache with a fallback synthetic ref for backwards compatibility
+            # Format: "SA_ref:Commentator" (e.g., "Shulchan Arukh, Orach Chaim 1:1:Mishnah Berurah")
+            fallback_ref = f"{ref}:{commentator}"
+            if fallback_ref not in cache:
+                cache[fallback_ref] = SourceText(
+                    ref=comm_ref or fallback_ref,  # Prefer actual ref
+                    hebrew=comm_text,
+                    english="",
+                    book=commentator
                 )
     
     logger.info(f"Built source cache with {len(cache)} entries")
@@ -118,26 +133,37 @@ def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> t
     Build system and user prompts that instruct the LLM to use <cite> tags.
     Returns (system_prompt, user_prompt).
     """
-    # Format available references for the prompt
-    refs_list = "\n".join(f"- {ref}" for ref in source_refs[:10])
+    # Format available references for the prompt (include more to cover commentaries)
+    refs_list = "\n".join(f"- {ref}" for ref in source_refs[:25])
     
     system_prompt = """You are a Torah scholar assistant specializing in Shulchan Arukh and its commentaries.
 
 CITATION FORMAT:
 When you want to cite a source, use this XML tag format:
-<cite ref="EXACT_REFERENCE">your brief explanation of this source</cite>
+<cite ref="EXACT_REFERENCE">CONTENT</cite>
 
-Example:
-The Shulchan Arukh teaches that <cite ref="Shulchan Arukh, Orach Chaim 1:1">one should arise with vigor to serve the Creator</cite>. This applies every morning.
+CRITICAL - CONTENT RULES BY SOURCE TYPE:
+1. For SHULCHAN ARUKH citations: Leave the content EMPTY (just use <>). A pre-made English translation is automatically appended.
+   Example: The Shulchan Arukh explains that it is assur <cite ref="Shulchan Arukh, Orach Chayim 1:1"></cite>
+
+2. For MISHNAH BERURAH citations: Provide a clear ENGLISH TRANSLATION of the Mishnah Berurah's Hebrew words.
+   Example: The Mishnah Berurah explains that the purpose is to increase in joy. <cite ref="Mishnah Berurah 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
+
+3. For BA'ER HETEV citations: Provide a clear ENGLISH TRANSLATION of the Ba'er Hetev's Hebrew words.
+   Example: The Ba'er Hetev adds that this applies even when <cite ref="Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:1">This means that even if the evil inclination persuades him to stay in bed</cite>
 
 IMPORTANT RULES:
-1. Use the EXACT reference strings provided in the context (copy-paste them)
-2. The text inside <cite> tags is YOUR explanation - I will display the actual source text separately
-3. Keep your explanations clear and accessible
-4. Each source should be cited at most once
-5. Write in flowing paragraphs with line breaks between ideas
-6. Always cite sources when stating halachic rulings
-7. If the context doesn't contain enough information, say so clearly
+1. Use the EXACT reference strings provided in the AVAILABLE REFERENCES list (copy-paste them exactly)
+2. Commentaries have their own reference format from Sefaria:
+   - Mishnah Berurah: "Mishnah Berurah {siman}:{seif_katan}" (e.g., "Mishnah Berurah 1:3")
+   - Ba'er Hetev: "Ba'er Hetev on Shulchan Arukh, Orach Chayim {siman}:{seif_katan}"
+3. For Mishnah Berurah and Ba'er Hetev: TRANSLATE the Hebrew text faithfully (these don't have pre-made translations)
+4. For Shulchan Arukh: LEAVE CONTENT EMPTY (translation is auto-appended)
+5. Each source should be cited at most once
+6. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary for the answer
+7. Write in flowing paragraphs with line breaks between ideas
+8. Always cite sources when stating halachic rulings
+9. If the context doesn't contain enough information, say so clearly
 
 STRUCTURE:
 - Start with a brief introduction
@@ -189,83 +215,129 @@ async def stream_with_citations(
         {"role": "user", "content": user_prompt}
     ]
     
-    # Step 3: Stream from OpenRouter
+    # Step 3: Stream from OpenRouter using async httpx
     try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {openrouter_api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://kesher.ai",
-                "X-Title": "Kesher AI"
-            },
-            json={
-                "model": CHAT_MODEL,
-                "messages": messages,
-                "temperature": 0.3,
-                "max_tokens": 3000,
-                "stream": True
-            },
-            stream=True,
-            timeout=120
-        )
-        response.raise_for_status()
-        
-        # Paragraph buffer for streaming
-        buffer = ""
-        
-        for line in response.iter_lines():
-            if not line:
-                continue
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openrouter_api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://kesher.ai",
+                    "X-Title": "Kesher AI"
+                },
+                json={
+                    "model": CHAT_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 3000,
+                    "stream": True
+                }
+            ) as response:
+                response.raise_for_status()
                 
-            line = line.decode('utf-8')
-            if not line.startswith('data: '):
-                continue
+                # Paragraph buffer for streaming
+                buffer = ""
                 
-            data = line[6:]
-            if data == '[DONE]':
-                break
-                
-            try:
-                chunk = json.loads(data)
-                if 'choices' not in chunk or len(chunk['choices']) == 0:
-                    continue
-                    
-                delta = chunk['choices'][0].get('delta', {})
-                content = delta.get('content', '')
-                
-                if not content:
-                    continue
-                
-                buffer += content
-                
-                # Check for paragraph breaks (double newline or single newline for simpler streaming)
-                # We'll emit on single newlines for responsiveness
-                while '\n' in buffer:
-                    # Find the line break
-                    idx = buffer.index('\n')
-                    paragraph = buffer[:idx].strip()
-                    buffer = buffer[idx + 1:]
-                    
-                    if paragraph:
-                        # Parse this paragraph for citations and emit
-                        async for event in parse_and_emit_paragraph(paragraph, source_cache):
-                            yield event
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                        
+                    if not line.startswith('data: '):
+                        continue
+                        
+                    data = line[6:]
+                    if data == '[DONE]':
+                        break
+                        
+                    try:
+                        chunk = json.loads(data)
+                        if 'choices' not in chunk or len(chunk['choices']) == 0:
+                            continue
                             
-            except json.JSONDecodeError:
-                continue
-        
-        # Emit any remaining content in buffer
-        if buffer.strip():
-            async for event in parse_and_emit_paragraph(buffer.strip(), source_cache):
-                yield event
-        
-        yield {"type": "done"}
+                        delta = chunk['choices'][0].get('delta', {})
+                        content = delta.get('content', '')
+                        
+                        if not content:
+                            continue
+                        
+                        buffer += content
+                        
+                        # Check for paragraph breaks (double newline or single newline for simpler streaming)
+                        # We'll emit on single newlines for responsiveness
+                        while '\n' in buffer:
+                            # Find the line break
+                            idx = buffer.index('\n')
+                            paragraph = buffer[:idx].strip()
+                            buffer = buffer[idx + 1:]
+                            
+                            if paragraph:
+                                # Parse this paragraph for citations and emit
+                                async for event in parse_and_emit_paragraph(paragraph, source_cache):
+                                    yield event
+                                    
+                    except json.JSONDecodeError:
+                        continue
+                
+                # Emit any remaining content in buffer
+                if buffer.strip():
+                    async for event in parse_and_emit_paragraph(buffer.strip(), source_cache):
+                        yield event
+                
+                yield {"type": "done"}
         
     except Exception as e:
         logger.error(f"Stream error: {e}")
         yield {"type": "paragraph", "content": f"Error generating response: {e}"}
         yield {"type": "done"}
+
+
+def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Optional[SourceText]:
+    """
+    Find the best matching source for a reference that isn't in the cache.
+    Handles various reference formats intelligently.
+    
+    Priority:
+    1. Look for similar Sefaria refs (e.g., "Mishnah Berurah 1:1" for "Mishnah Berurah 1:2")
+    2. Match by book name for any seif in that siman
+    3. Fall back to base SA seif
+    """
+    # Try to extract the book name and numbers from the ref
+    # Common formats:
+    # - "Mishnah Berurah 1:3"
+    # - "Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:3"
+    # - "Shulchan Arukh, Orach Chayim 1:1"
+    
+    # Strategy 1: Find any ref from the same book in the same siman
+    # Extract siman number from ref
+    siman_match = re.search(r'(\d+):\d+$', ref)
+    if siman_match:
+        siman = siman_match.group(1)
+        # Find book name (everything before the numbers)
+        book_part = re.sub(r'\s*\d+:\d+$', '', ref)
+        
+        # Look for any cached ref from the same book and siman
+        for cached_ref, cached_source in source_cache.items():
+            if cached_ref.startswith(book_part) and f" {siman}:" in cached_ref:
+                return cached_source
+    
+    # Strategy 2: Match by book title alone (first available)
+    for cached_ref, cached_source in source_cache.items():
+        # Check if the book name matches
+        if "Mishnah Berurah" in ref and "Mishnah Berurah" in cached_ref:
+            return cached_source
+        if "Ba'er Hetev" in ref and "Ba'er Hetev" in cached_ref:
+            return cached_source
+        if "Shulchan Arukh" in ref and cached_ref.startswith("Shulchan Arukh"):
+            return cached_source
+    
+    # Strategy 3: Try partial match
+    for cached_ref, cached_source in source_cache.items():
+        if ref in cached_ref or cached_ref in ref:
+            return cached_source
+    
+    return None
 
 
 async def parse_and_emit_paragraph(
@@ -306,12 +378,8 @@ async def parse_and_emit_paragraph(
                 "book": source.book
             }
         else:
-            # Source not in cache - try to find a partial match
-            matched_source = None
-            for cached_ref, cached_source in source_cache.items():
-                if ref in cached_ref or cached_ref in ref:
-                    matched_source = cached_source
-                    break
+            # Source not in cache - try smart matching for commentary subsections
+            matched_source = find_best_source_match(ref, source_cache)
             
             if matched_source:
                 yield {

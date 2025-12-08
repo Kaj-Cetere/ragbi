@@ -82,16 +82,6 @@ export function InlineCitation({
         className="overflow-hidden"
       >
         <div className="px-4 py-4 space-y-4">
-          {/* Context (LLM's explanation) */}
-          {context && (
-            <p
-              className="text-sm font-sans leading-relaxed"
-              style={{ color: "var(--color-text-main)" }}
-            >
-              {context}
-            </p>
-          )}
-
           {/* Hebrew text */}
           {cleanHebrew && (
             <div
@@ -106,16 +96,24 @@ export function InlineCitation({
             </div>
           )}
 
-          {/* English translation */}
-          {cleanEnglish && (
-            <div
-              className="font-serif text-sm leading-relaxed italic"
-              style={{ color: "var(--color-text-muted)" }}
-            >
-              {cleanEnglish}
-              {english.length > 400 && "..."}
-            </div>
-          )}
+          {/* English translation - for Shulchan Arukh use pre-fetched english, for commentaries use context (LLM translation) */}
+          {(() => {
+            const isCommentary = book === "Mishnah Berurah" || book === "Ba'er Hetev" || 
+              ref_.includes("Mishnah Berurah") || ref_.includes("Ba'er Hetev");
+            const translationText = isCommentary ? context : cleanEnglish;
+            const maxLen = isCommentary ? 400 : 400;
+            const originalLen = isCommentary ? context.length : english.length;
+            
+            return translationText && (
+              <div
+                className="font-serif text-sm leading-relaxed italic"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                {translationText.slice(0, maxLen)}
+                {originalLen > maxLen && "..."}
+              </div>
+            );
+          })()}
 
           {/* View on Sefaria link */}
           <button

@@ -56,16 +56,6 @@ export default function Home() {
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll during streaming
-  useEffect(() => {
-    if (scrollerRef.current && !isComplete) {
-      scrollerRef.current.scrollTo({
-        top: scrollerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  }, [responseSegments, fallbackText, isComplete]);
-
   // Handle search submission
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
@@ -291,8 +281,8 @@ export default function Home() {
               </motion.div>
             )}
 
-            {/* Citation Cards for top sources */}
-            {!isLoading && sources.slice(0, 3).map((source, i) => (
+            {/* Citation Cards for top sources - only show when NO inline citations exist (legacy fallback) */}
+            {!isLoading && responseSegments.filter(s => s.type === "citation").length === 0 && sources.slice(0, 3).map((source, i) => (
               <CitationCard
                 key={source.ref}
                 source={source}

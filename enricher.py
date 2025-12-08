@@ -69,9 +69,10 @@ def fetch_commentaries_for_ref(sefaria_ref, book_title):
             if he_text:
                 filtered.append({
                     "commentator": title,
-                    "text": he_text
+                    "text": he_text,
+                    "ref": c.get("ref", "")  # Include the actual Sefaria ref
                 })
-                logger.debug(f"   ✅ Included: {title} ({len(he_text)} chars)")
+                logger.debug(f"   ✅ Included: {title} ref={c.get('ref', '')} ({len(he_text)} chars)")
             else:
                 logger.debug(f"   ⚠️ Skipped {title} - no Hebrew text")
         else:

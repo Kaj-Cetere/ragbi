@@ -1,0 +1,184 @@
+/* ════ THEME VARIABLES ════ */
+.loaderWrapper {
+    --bg-0: transparent;
+    --core: #D97757;    /* Terracotta (Primary Accent) */
+    --mid: #4A6C6F;     /* Sage (Secondary Accent) */
+    --outer: #2C2825;   /* Dark Text Color */
+    
+    --anim-time: 12s;   /* Full Cycle Duration */
+    
+    /* Ensure the loader fits its container or takes full screen if needed. */
+    position: relative;
+    width: 500px; 
+    height: 500px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Prevent overflow if the animation expands too much, though visual overflow might be desired */
+}
+
+.constellationSystem {
+    position: relative;
+    width: 100%; height: 100%;
+    animation: systemCycle var(--anim-time) ease-in-out infinite;
+    /* Ensure the center is correct */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* ════ ORB STYLING (High Intensity) ════ */
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    z-index: 2;
+    /* 
+       Gradient adjusted for light mode:
+       White center -> Color -> Transparent
+    */
+    background: radial-gradient(circle at center, 
+        rgba(255,255,255,0.9) 0%, 
+        var(--c) 40%, 
+        var(--c) 60%, 
+        rgba(0,0,0,0) 75%);
+    /* Removed mix-blend-mode: screen; for visibility on white */
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 6px var(--c); /* Reduced glow spread */
+}
+
+/* ════ LINE STYLING (High Visibility) ════ */
+.line {
+    position: absolute;
+    top: 50%; left: 0;
+    height: 1px; /* Thin, sharp lines */
+    width: 100%;
+    /* Gradient from transparent to solid color */
+    background: linear-gradient(to right, rgba(255,255,255,0), var(--line-c));
+    transform: translateY(-50%);
+    z-index: 1;
+    /* Reduced glow for light mode */
+    box-shadow: 0 0 2px var(--line-c); 
+}
+
+/* ════ STRUCTURE ════ */
+.limbWrapper {
+    position: absolute;
+    top: 50%; left: 50%;
+    height: 0; width: 0;
+    transform: rotate(var(--r));
+}
+
+.extender {
+    position: absolute;
+    top: 0; left: 0;
+    height: 2px;
+    width: 0px; 
+    transform-origin: left center;
+}
+
+/* ════ GENERATION 0: Seed ════ */
+.seed {
+    top: 50%; left: 50%;
+    width: 36px; height: 36px;
+    --c: var(--core);
+    animation: pulseCore 3s infinite ease-in-out;
+}
+
+/* ════ GENERATION 1 ════ */
+.g1Extender {
+    /* High visibility color */
+    --line-c: rgba(74, 108, 111, 0.6); /* Sage with opacity */
+    animation: growG1 var(--anim-time) cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.g1Orb {
+    left: 100%; top: 50%;
+    width: 24px; height: 24px;
+    --c: var(--mid);
+    /* No opacity reduction */
+}
+
+/* ════ GENERATION 2 ════ */
+.g2Wrapper { top: 50%; left: 100%; }
+
+.g2Extender {
+    /* Distinct color, high visibility */
+    --line-c: rgba(44, 40, 37, 0.3); /* Dark text color with low opacity */
+    animation: growG2 var(--anim-time) cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.g2Orb {
+    left: 100%; top: 50%;
+    width: 16px; height: 16px;
+    --c: var(--outer);
+    /* Full Brightness */
+}
+
+/* ════ GENERATION 3 ════ */
+.g3Wrapper { top: 50%; left: 100%; }
+
+.g3Extender {
+    /* Strong Terracotta line */
+    --line-c: rgba(217, 119, 87, 0.5); /* Terracotta with opacity */
+    animation: growG3 var(--anim-time) cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+.g3Orb {
+    left: 100%; top: 50%;
+    width: 10px; height: 10px;
+    --c: var(--core);
+    /* Full Brightness */
+}
+
+/* ════ KEYFRAMES ════ */
+
+@keyframes systemCycle {
+    0% { transform: rotate(0deg) scale(0.6); }
+    50% { transform: rotate(20deg) scale(1); }
+    80% { transform: rotate(40deg) scale(1); opacity: 1; }
+    90% { transform: rotate(180deg) scale(0.2); opacity: 1; } /* Implode */
+    100% { transform: rotate(720deg) scale(0); opacity: 0; }
+}
+
+/* Grow Animations: Opacity stays at 1 (or 0.9) */
+@keyframes growG1 {
+    0% { width: 0; opacity: 0; }
+    10% { width: 0; opacity: 1; }
+    20% { width: 70px; }
+    80% { width: 75px; opacity: 1; }
+    90% { width: 0px; opacity: 0; }
+    100% { width: 0; opacity: 0; }
+}
+
+@keyframes growG2 {
+    0%, 20% { width: 0; opacity: 0; }
+    35% { width: 50px; opacity: 1; }
+    80% { width: 55px; opacity: 1; }
+    90% { width: 0; opacity: 0; }
+    100% { width: 0; opacity: 0; }
+}
+
+@keyframes growG3 {
+    0%, 35% { width: 0; opacity: 0; }
+    55% { width: 45px; opacity: 1; } /* Full extension */
+    80% { width: 40px; opacity: 1; }
+    90% { width: 0; opacity: 0; }
+    100% { width: 0; opacity: 0; }
+}
+
+@keyframes pulseCore {
+    0%, 100% { box-shadow: 0 0 15px rgba(217, 119, 87, 0.3); transform: translate(-50%,-50%) scale(1); }
+    50% { box-shadow: 0 0 30px rgba(217, 119, 87, 0.6); transform: translate(-50%,-50%) scale(1.15); }
+}
+
+/* ════ TEXT ════ */
+.statusContainer { 
+    /* position: absolute; bottom: 10%; - removed absolute to be part of flow if needed, or keep it */
+    margin-top: 2rem;
+    text-align: center; 
+}
+.statusText {
+    font-size: 14px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--mid); opacity: 0.9;
+    font-weight: 600; /* Increased weight for light mode */
+    animation: textFade 2s infinite alternate;
+    font-family: 'Outfit', sans-serif; /* You might need to import this font or use a system font */
+}
+@keyframes textFade { from { opacity: 0.5; } to { opacity: 1; text-shadow: 0 0 5px rgba(74, 108, 111, 0.2); } }
