@@ -49,9 +49,9 @@ RPC_FUNCTION = "match_sefaria_chunks_gemini_contextual"
 CHAT_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025"
 
 # RAG Settings
-TOP_K_RETRIEVE_FOR_RERANK = 60
+TOP_K_RETRIEVE_FOR_RERANK = 50
 TOP_K_AFTER_RERANK = 10
-TOP_K_HYDRATE = 5
+TOP_K_HYDRATE = 3
 
 # --- GLOBAL CLIENTS ---
 openrouter_client: OpenRouter = None
