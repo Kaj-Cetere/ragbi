@@ -75,6 +75,24 @@
   50% { opacity: 1; }
 }
 
+@keyframes aiGlow {
+  0%, 100% {
+    text-shadow: 0 0 8px rgba(217, 119, 87, 0.4), 0 0 16px rgba(217, 119, 87, 0.2);
+  }
+  50% {
+    text-shadow: 0 0 12px rgba(217, 119, 87, 0.6), 0 0 24px rgba(217, 119, 87, 0.3);
+  }
+}
+
+@keyframes aiShimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    BASE STYLES
    ══════════════════════════════════════════════════════════════════════ */
@@ -111,6 +129,25 @@ body {
 /* ══════════════════════════════════════════════════════════════════════
    COMPONENT STYLES
    ══════════════════════════════════════════════════════════════════════ */
+
+/* AI Letter styling for HALACHIC title */
+.ai-letter {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    var(--color-accent-primary) 0%,
+    #F0B8A8 40%,
+    var(--color-accent-primary) 50%,
+    #F0B8A8 60%,
+    var(--color-accent-primary) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: aiShimmer 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(217, 119, 87, 0.35));
+}
 
 /* Search Box */
 .search-box {

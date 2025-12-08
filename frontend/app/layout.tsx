@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kesher AI - Torah Learning Assistant",
+  title: "HALACHIC - AI-Powered Torah Learning",
   description: "Ask questions about Halakha with AI-powered insights from Shulchan Arukh and classical commentaries",
 };
 
