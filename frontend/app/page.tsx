@@ -172,10 +172,98 @@ export default function Home() {
             transition={{ duration: 0.5, ease: [0.8, 0, 0.2, 1] }}
             className="absolute inset-0 flex flex-col items-center justify-center z-20"
           >
-            {/* Hero Logo */}
-            <h1 className="font-serif text-5xl mb-10 text-center tracking-tight" style={{ color: 'var(--color-text-main)' }}>
-              Kesher<span style={{ color: 'var(--color-accent-primary)' }}>.AI</span>
-            </h1>
+            {/* Hero Logo - HALACHIC with AI emphasis */}
+            <motion.h1
+              className="text-6xl md:text-7xl mb-10 text-center tracking-wider font-light select-none"
+              style={{ fontFamily: 'Outfit, sans-serif' }}
+            >
+              {/* H */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                H
+              </motion.span>
+              {/* A */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                A
+              </motion.span>
+              {/* L */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                L
+              </motion.span>
+              {/* A - AI letter with special styling */}
+              <motion.span
+                initial={{ opacity: 0, scale: 0.5, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                transition={{ duration: 0.8, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block ai-letter"
+                style={{
+                  color: 'var(--color-accent-primary)',
+                  fontWeight: 500,
+                }}
+              >
+                A
+              </motion.span>
+              {/* C */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                C
+              </motion.span>
+              {/* H */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                H
+              </motion.span>
+              {/* I - AI letter with special styling */}
+              <motion.span
+                initial={{ opacity: 0, scale: 0.5, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                transition={{ duration: 0.8, delay: 0.85, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block ai-letter"
+                style={{
+                  color: 'var(--color-accent-primary)',
+                  fontWeight: 500,
+                }}
+              >
+                I
+              </motion.span>
+              {/* C */}
+              <motion.span
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-block"
+                style={{ color: 'var(--color-text-main)' }}
+              >
+                C
+              </motion.span>
+            </motion.h1>
 
             {/* Search Container */}
             <div className="w-full max-w-[680px] px-6">
