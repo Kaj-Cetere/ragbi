@@ -1,0 +1,11 @@
+fastapi==0.124.0
+uvicorn[standard]==0.38.0
+python-dotenv>=1.1.0
+supabase==2.25.0
+openrouter==0.1.1
+requests==2.32.3
+pydantic==2.12.5
+pydantic-ai==1.27.0
+zeroentropy==0.1.0a7
+nest-asyncio==1.6.0
+httpx==0.28.1

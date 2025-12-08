@@ -42,7 +42,7 @@ GEMINI_EMBEDDING_MODEL = "google/gemini-embedding-001"  # For embeddings via Ope
 CONTEXT_TEMPERATURE = 0.3
 CONTEXT_MAX_TOKENS = 150
 EMBEDDING_BATCH_SIZE = 50  # Batch size for Gemini embeddings
-TEST_CHUNK_LIMIT = 5000  # Total chunks to process per run (will paginate through Supabase's 1000 limit)
+TEST_CHUNK_LIMIT = 4000 # Total chunks to process per run (will paginate through Supabase's 1000 limit)
 SUPABASE_PAGE_SIZE = 1000  # Supabase max rows per query
 PROGRESS_FILE = "contextual_embeddings_progress.json"  # Checkpoint file
 
