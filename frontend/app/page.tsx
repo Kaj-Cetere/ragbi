@@ -174,8 +174,8 @@ export default function Home() {
           >
             {/* Hero Logo - HALACHIC with AI emphasis */}
             <motion.h1
-              className="text-4xl md:text-5xl mb-10 text-center tracking-wide select-none italic"
-              style={{ fontFamily: '"Crimson Text", Georgia, serif', fontWeight: 400 }}
+              className="text-3xl md:text-4xl mb-10 text-center tracking-widest select-none italic"
+              style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontWeight: 300 }}
             >
               {/* H */}
               <motion.span
