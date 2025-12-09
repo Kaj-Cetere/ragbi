@@ -53,10 +53,6 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
 
-  // Scroll state
-  const [showTopBar, setShowTopBar] = useState(true);
-  const lastScrollYRef = useRef(0);
-
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -164,28 +160,6 @@ export default function Home() {
     setSelectedRef(ref);
     setSidebarOpen(true);
   };
-
-  // Handle scroll to hide/show top bar
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-
-    const handleScroll = () => {
-      const currentScrollY = scroller.scrollTop;
-      const isScrollingDown = currentScrollY > lastScrollYRef.current;
-
-      if (isScrollingDown) {
-        setShowTopBar(false);
-      } else {
-        setShowTopBar(true);
-      }
-
-      lastScrollYRef.current = currentScrollY;
-    };
-
-    scroller.addEventListener("scroll", handleScroll);
-    return () => scroller.removeEventListener("scroll", handleScroll);
-  }, []);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -331,32 +305,21 @@ export default function Home() {
           isSearching ? "" : "pointer-events-none"
         }`}
       >
-        {/* Top Bar */}
-        <motion.div
-          initial={{ opacity: 1, height: "auto" }}
-          animate={{
-            opacity: showTopBar ? 1 : 0,
-            height: showTopBar ? "auto" : 0,
-            marginBottom: showTopBar ? 0 : 0,
-          }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="overflow-hidden px-6 py-5 border-b glass-bg sticky top-0 z-10"
-          style={{ borderColor: showTopBar ? 'var(--color-border)' : 'transparent' }}
-        >
-          <div className="max-w-[700px] mx-auto flex items-center gap-3">
-            <Search size={18} style={{ color: 'var(--color-text-light)' }} />
-            <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
-              {currentQuery}
-            </span>
-          </div>
-        </motion.div>
-
         {/* Stream Content */}
         <div
           ref={scrollerRef}
           className="flex-1 overflow-y-auto px-6 py-10 pb-36"
         >
           <div className="max-w-[700px] mx-auto">
+            {/* Top Bar (Question) */}
+            <div className="px-6 py-5 mb-6 -mx-6 border-b glass-bg" style={{ borderColor: 'var(--color-border)' }}>
+              <div className="flex items-center gap-3">
+                <Search size={18} style={{ color: 'var(--color-text-light)' }} />
+                <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
+                  {currentQuery}
+                </span>
+              </div>
+            </div>
             {/* Loader */}
             {isLoading && <Loader text={loadingStatus} />}
 
