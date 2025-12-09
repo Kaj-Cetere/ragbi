@@ -40,21 +40,39 @@ def fetch_sefaria_text(ref: str) -> Optional[dict]:
         # Clean the reference for API call
         api_ref = ref.replace(" ", "_")
         url = f"https://www.sefaria.org/api/texts/{api_ref}"
-        
+
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         data = response.json()
-        
+
         # Handle various response formats
         hebrew = data.get("he", "")
         english = data.get("text", "")
-        
-        # If it's a list, join it
+
+        # Extract seif number from ref if it exists (e.g., "Shulchan Arukh, Orach Chayim 1:2" -> seif 2)
+        seif_index = None
+        if ":" in ref:
+            try:
+                # Get the part after the last space and extract seif number after the colon
+                ref_parts = ref.rsplit(" ", 1)[-1]  # Get "1:2"
+                if ":" in ref_parts:
+                    seif_num = int(ref_parts.split(":")[-1])  # Get 2
+                    seif_index = seif_num - 1  # Convert to 0-based index
+            except (ValueError, IndexError):
+                pass
+
+        # If it's a list, extract the specific seif if we have an index, otherwise join all
         if isinstance(hebrew, list):
-            hebrew = " ".join(str(h) for h in hebrew if h)
+            if seif_index is not None and 0 <= seif_index < len(hebrew):
+                hebrew = str(hebrew[seif_index]) if hebrew[seif_index] else ""
+            else:
+                hebrew = " ".join(str(h) for h in hebrew if h)
         if isinstance(english, list):
-            english = " ".join(str(e) for e in english if e)
-        
+            if seif_index is not None and 0 <= seif_index < len(english):
+                english = str(english[seif_index]) if english[seif_index] else ""
+            else:
+                english = " ".join(str(e) for e in english if e)
+
         return {
             "hebrew": hebrew,
             "english": english,
