@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-export function Loader() {
+interface LoaderProps {
+  text?: string;
+}
+
+export function Loader({ text }: LoaderProps = {}) {
   const [cycle, setCycle] = useState(0);
   const [visibleCount, setVisibleCount] = useState(0);
 
@@ -658,7 +662,7 @@ export function Loader() {
           margin: 0,
           animation: 'textPulse 2s ease-in-out infinite'
         }}>
-          Searching...
+          {text || 'Searching...'}
         </p>
       </div>
 
