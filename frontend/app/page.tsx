@@ -174,8 +174,8 @@ export default function Home() {
           >
             {/* Hero Logo - HALACHIC with AI emphasis */}
             <motion.h1
-              className="text-6xl md:text-7xl mb-10 text-center tracking-wider font-light select-none"
-              style={{ fontFamily: 'Outfit, sans-serif' }}
+              className="text-4xl md:text-5xl mb-10 text-center tracking-wide select-none italic"
+              style={{ fontFamily: '"Crimson Text", Georgia, serif', fontWeight: 400 }}
             >
               {/* H */}
               <motion.span
@@ -213,10 +213,6 @@ export default function Home() {
                 animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
                 transition={{ duration: 0.8, delay: 0.7, ease: [0.22, 1, 0.36, 1] }}
                 className="inline-block ai-letter"
-                style={{
-                  color: 'var(--color-accent-primary)',
-                  fontWeight: 500,
-                }}
               >
                 A
               </motion.span>
@@ -246,10 +242,6 @@ export default function Home() {
                 animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
                 transition={{ duration: 0.8, delay: 0.85, ease: [0.22, 1, 0.36, 1] }}
                 className="inline-block ai-letter"
-                style={{
-                  color: 'var(--color-accent-primary)',
-                  fontWeight: 500,
-                }}
               >
                 I
               </motion.span>
