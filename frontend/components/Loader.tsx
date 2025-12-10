@@ -568,22 +568,9 @@ export function Loader({ text }: LoaderProps = {}) {
       alignItems: 'center',
       justifyContent: 'center',
       padding: '60px 20px',
-      background: 'linear-gradient(165deg, #FAF8F5 0%, #F5F1EC 40%, #EDE8E1 100%)',
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-      overflow: 'hidden',
-      borderRadius: 'var(--radius-lg)',
       marginBottom: '24px'
     }}>
-
-      {/* Subtle texture */}
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        opacity: 0.015,
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' /%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' /%3E%3C/svg%3E")`,
-        pointerEvents: 'none'
-      }} />
-
       <div style={{ position: 'relative', width: '280px', height: '300px' }} key={cycle}>
         <svg viewBox="-140 -150 280 300" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
           <defs>
