@@ -161,8 +161,8 @@ When you want to cite a source, use this XML tag format:
 <cite ref="EXACT_REFERENCE">CONTENT</cite>
 
 CRITICAL - CONTENT RULES BY SOURCE TYPE:
-1. For SHULCHAN ARUKH citations: Leave the content EMPTY (just use <>). A pre-made English translation is automatically appended.
-   Example: The Shulchan Arukh explains that it is assur <cite ref="Shulchan Arukh, Orach Chayim 1:1"></cite>
+1. For SHULCHAN ARUKH citations: Provide a clear, accurate ENGLISH TRANSLATION of the Shulchan Arukh's Hebrew words.
+   Example: The Shulchan Arukh explains that <cite ref="Shulchan Arukh, Orach Chayim 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
 
 2. For MISHNAH BERURAH citations: Provide a clear ENGLISH TRANSLATION of the Mishnah Berurah's Hebrew words.
    Example: The Mishnah Berurah explains that the purpose is to increase in joy. <cite ref="Mishnah Berurah 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
@@ -175,13 +175,12 @@ IMPORTANT RULES:
 2. Commentaries have their own reference format from Sefaria:
    - Mishnah Berurah: "Mishnah Berurah {siman}:{seif_katan}" (e.g., "Mishnah Berurah 1:3")
    - Ba'er Hetev: "Ba'er Hetev on Shulchan Arukh, Orach Chayim {siman}:{seif_katan}"
-3. For Mishnah Berurah and Ba'er Hetev: TRANSLATE the Hebrew text faithfully (these don't have pre-made translations)
-4. For Shulchan Arukh: LEAVE CONTENT EMPTY (translation is auto-appended)
-5. Each source should be cited at most once
-6. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary for the answer
-7. Write in flowing paragraphs with line breaks between ideas
-8. Always cite sources when stating halachic rulings
-9. If the context doesn't contain enough information, say so clearly
+3. For ALL sources (Shulchan Arukh, Mishnah Berurah, and Ba'er Hetev): TRANSLATE the Hebrew text faithfully and accurately
+4. Each source should be cited at most once
+5. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary for the answer
+6. Write in flowing paragraphs with line breaks between ideas
+7. Always cite sources when stating halachic rulings
+8. If the context doesn't contain enough information, say so clearly
 
 STRUCTURE:
 - Start with a brief introduction
