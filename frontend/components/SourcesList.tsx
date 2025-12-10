@@ -16,7 +16,7 @@ export function SourcesList({ sources, onSourceClick }: SourcesListProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="mt-12 pt-8"
+      className="mt-12 pt-8 pb-16"
       style={{ borderTop: '1px solid var(--color-border)' }}
     >
       <div className="text-xs font-bold uppercase tracking-wider font-sans mb-4" style={{ color: 'var(--color-text-light)' }}>
