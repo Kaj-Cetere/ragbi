@@ -389,7 +389,7 @@ export default function Home() {
                 value={followUpValue}
                 onChange={(e) => setFollowUpValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleFollowUp()}
-                placeholder="Ask a follow up question..."
+                placeholder="ask another question"
                 className="flex-1 bg-transparent border-none text-sm outline-none font-sans"
                 style={{ color: 'var(--color-text-main)' }}
               />
