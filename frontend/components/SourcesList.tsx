@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Scroll } from "lucide-react";
 import type { Source } from "@/utils/api";
 
 interface SourcesListProps {
@@ -24,24 +23,14 @@ export function SourcesList({ sources, onSourceClick }: SourcesListProps) {
         Additional Sources
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         {sources.map((source) => (
           <div
             key={source.ref}
-            className="source-item"
+            className="source-link"
             onClick={() => onSourceClick(source.ref)}
           >
-            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-accent-light)', color: 'var(--color-accent-secondary)' }}>
-              <Scroll size={18} />
-            </div>
-            <div>
-              <div className="font-semibold text-sm font-sans" style={{ color: 'var(--color-text-main)' }}>
-                {source.ref}
-              </div>
-              <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                {source.book} • {(source.similarity * 100).toFixed(0)}% match
-              </div>
-            </div>
+            {source.ref}
           </div>
         ))}
       </div>
