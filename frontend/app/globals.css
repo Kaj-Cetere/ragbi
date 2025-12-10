@@ -297,6 +297,23 @@ body {
   justify-content: center;
 }
 
+/* Source Link */
+.source-link {
+  color: var(--color-accent-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  transition: all 0.2s;
+  padding: 4px 0;
+  display: inline-block;
+}
+
+.source-link:hover {
+  color: var(--color-accent);
+  text-decoration-thickness: 2px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    LOADER STYLES
    ══════════════════════════════════════════════════════════════════════ */
