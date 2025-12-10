@@ -308,7 +308,7 @@ export default function Home() {
         {/* Stream Content */}
         <div
           ref={scrollerRef}
-          className="flex-1 overflow-y-auto px-6 py-10 pb-36"
+          className="flex-1 overflow-y-auto px-6 py-10 pb-48"
         >
           <div className="max-w-[700px] mx-auto">
             {/* Top Bar (Question) */}

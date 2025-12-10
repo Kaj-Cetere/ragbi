@@ -567,10 +567,12 @@ export function Loader({ text }: LoaderProps = {}) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: '100vh',
+      padding: '60px 20px',
       background: 'linear-gradient(165deg, #FAF8F5 0%, #F5F1EC 40%, #EDE8E1 100%)',
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-      overflow: 'hidden'
+      overflow: 'hidden',
+      borderRadius: 'var(--radius-lg)',
+      marginBottom: '24px'
     }}>
 
       {/* Subtle texture */}
