@@ -70,7 +70,8 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
 
-  // Performance metrics state
+  // Performance metrics state - hidden by default, unlocked with secret code
+  const [metricsUnlocked, setMetricsUnlocked] = useState(false);
   const [metricsVisible, setMetricsVisible] = useState(true);
   const [stageMetrics, setStageMetrics] = useState<StageMetric[]>([]);
   const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null);
@@ -82,9 +83,20 @@ export default function Home() {
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  // Secret code to unlock metrics: "1226"
+  const SECRET_CODE = "1226";
+
   // Handle search submission
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
+
+    // Check for secret code to unlock metrics
+    if (query.trim() === SECRET_CODE) {
+      setMetricsUnlocked(true);
+      setMetricsVisible(true);
+      setInputValue("");
+      return;
+    }
 
     // Initialize frontend metrics tracking
     const queryStartTime = Date.now();
@@ -543,8 +555,8 @@ export default function Home() {
         selectedRef={selectedRef}
       />
 
-      {/* PERFORMANCE METRICS PANEL */}
-      {isSearching && (
+      {/* PERFORMANCE METRICS PANEL - Only shown when unlocked with secret code */}
+      {metricsUnlocked && isSearching && (
         <PerformanceMetrics
           stageMetrics={stageMetrics}
           summary={metricsSummary}
