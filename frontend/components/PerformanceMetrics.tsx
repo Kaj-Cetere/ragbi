@@ -82,6 +82,7 @@ const STAGE_INFO: Record<
   },
   reranking: { label: "Reranking", icon: BarChart3, color: "#8b5cf6" },
   hydration: { label: "Hydration", icon: Globe, color: "#14b8a6" },
+  source_cache: { label: "Source Cache", icon: Globe, color: "#06b6d4" },
   llm_first_token: { label: "Time to First Token", icon: Zap, color: "#f59e0b" },
   llm_complete: { label: "LLM Generation", icon: Activity, color: "#22c55e" },
 };
@@ -141,6 +142,7 @@ export function PerformanceMetrics({
     addStage("vector_search", "Vector Search", "#6366f1", Database);
     addStage("reranking", "Reranking", "#8b5cf6", BarChart3);
     addStage("hydration", "Hydration", "#14b8a6", Globe);
+    addStage("source_cache", "Source Cache", "#06b6d4", Globe);
     addStage("llm_generation", "LLM", "#22c55e", Activity);
 
     return stages;
