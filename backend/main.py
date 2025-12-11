@@ -8,6 +8,7 @@ import sys
 import json
 import asyncio
 import logging
+import time
 from typing import Optional, AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -340,21 +341,54 @@ async def chat_stream(request: QueryRequest):
     logger.info(f"🚀 New query: '{query[:50]}...' (agent={use_agent})")
     
     async def event_generator():
+        # Performance metrics tracking
+        metrics = {
+            "query_length": len(query),
+            "timestamps": {},
+            "durations": {},
+            "counts": {},
+            "metadata": {}
+        }
+        pipeline_start = time.time()
+        metrics["timestamps"]["pipeline_start"] = pipeline_start
+
         try:
             # Step 1: Embed query
             yield f"data: {json.dumps({'type': 'status', 'message': 'Generating embedding...'})}\n\n"
+            embed_start = time.time()
             embedding = get_query_embedding(query)
-            
+            embed_end = time.time()
+            metrics["durations"]["embedding"] = round((embed_end - embed_start) * 1000, 2)
+            metrics["counts"]["embedding_dimensions"] = len(embedding)
+
+            # Emit embedding metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'embedding', 'duration_ms': metrics['durations']['embedding'], 'details': {'dimensions': len(embedding)}})}\n\n"
+
             # Step 2: Vector search
             yield f"data: {json.dumps({'type': 'status', 'message': 'Searching sources...'})}\n\n"
+            search_start = time.time()
             chunks = search_chunks(embedding)
-            
+            search_end = time.time()
+            metrics["durations"]["vector_search"] = round((search_end - search_start) * 1000, 2)
+            metrics["counts"]["chunks_retrieved"] = len(chunks) if chunks else 0
+
+            # Calculate similarity distribution
+            if chunks:
+                similarities = [c.get("similarity", 0) for c in chunks]
+                metrics["metadata"]["similarity_max"] = round(max(similarities), 4)
+                metrics["metadata"]["similarity_min"] = round(min(similarities), 4)
+                metrics["metadata"]["similarity_avg"] = round(sum(similarities) / len(similarities), 4)
+
+            # Emit search metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'vector_search', 'duration_ms': metrics['durations']['vector_search'], 'details': {'chunks_found': metrics['counts']['chunks_retrieved'], 'similarity_max': metrics['metadata'].get('similarity_max'), 'similarity_avg': metrics['metadata'].get('similarity_avg')}})}\n\n"
+
             if not chunks:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant sources found'})}\n\n"
                 return
-            
+
             # Step 3: Rerank
             yield f"data: {json.dumps({'type': 'status', 'message': 'Reranking results...'})}\n\n"
+            rerank_start = time.time()
             chunks, was_reranked = rerank_with_fallback(
                 query=query,
                 chunks=chunks,
@@ -362,11 +396,36 @@ async def chat_stream(request: QueryRequest):
                 top_n=TOP_K_AFTER_RERANK,
                 enable_reranking=True
             )
-            
+            rerank_end = time.time()
+            metrics["durations"]["reranking"] = round((rerank_end - rerank_start) * 1000, 2)
+            metrics["metadata"]["reranking_applied"] = was_reranked
+            metrics["counts"]["chunks_after_rerank"] = len(chunks)
+
+            # Calculate rerank score distribution
+            if was_reranked and chunks:
+                rerank_scores = [c.get("rerank_score", 0) for c in chunks if c.get("rerank_score")]
+                if rerank_scores:
+                    metrics["metadata"]["rerank_score_max"] = round(max(rerank_scores), 4)
+                    metrics["metadata"]["rerank_score_avg"] = round(sum(rerank_scores) / len(rerank_scores), 4)
+
+            # Emit rerank metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'reranking', 'duration_ms': metrics['durations']['reranking'], 'details': {'was_reranked': was_reranked, 'chunks_after': metrics['counts']['chunks_after_rerank'], 'top_rerank_score': metrics['metadata'].get('rerank_score_max')}})}\n\n"
+
             # Step 4: Hydrate with commentaries
             yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching commentaries...'})}\n\n"
+            hydrate_start = time.time()
             hydrated = hydrate_chunks(chunks)
-            
+            hydrate_end = time.time()
+            metrics["durations"]["hydration"] = round((hydrate_end - hydrate_start) * 1000, 2)
+
+            # Count commentaries fetched
+            total_commentaries = sum(len(h.get("commentaries", [])) for h in hydrated if h.get("hydrated"))
+            metrics["counts"]["chunks_hydrated"] = sum(1 for h in hydrated if h.get("hydrated"))
+            metrics["counts"]["commentaries_fetched"] = total_commentaries
+
+            # Emit hydration metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'hydration', 'duration_ms': metrics['durations']['hydration'], 'details': {'chunks_hydrated': metrics['counts']['chunks_hydrated'], 'commentaries_fetched': total_commentaries}})}\n\n"
+
             # Send sources to frontend
             sources_data = [
                 {
@@ -384,11 +443,18 @@ async def chat_stream(request: QueryRequest):
                 for h in hydrated[:5]  # Top 5 sources
             ]
             yield f"data: {json.dumps({'type': 'sources', 'data': sources_data})}\n\n"
-            
+
             # Step 5: Generate response
             yield f"data: {json.dumps({'type': 'status', 'message': 'Generating response...'})}\n\n"
             context = build_context_prompt(hydrated)
-            
+            metrics["counts"]["context_length"] = len(context)
+
+            llm_start = time.time()
+            first_token_time = None
+            token_count = 0
+            paragraph_count = 0
+            citation_count = 0
+
             if use_agent:
                 # Use citation agent with paragraph-based streaming
                 try:
@@ -398,21 +464,59 @@ async def chat_stream(request: QueryRequest):
                         retrieved_chunks=hydrated,
                         openrouter_api_key=OPENROUTER_API_KEY
                     ):
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                            metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'llm_first_token', 'duration_ms': metrics['durations']['time_to_first_token']})}\n\n"
+
                         if event["type"] == "paragraph":
+                            paragraph_count += 1
+                            token_count += len(event.get("content", "").split())  # Rough word count
                             yield f"data: {json.dumps({'type': 'paragraph', 'content': event['content']})}\n\n"
                         elif event["type"] == "citation":
+                            citation_count += 1
                             yield f"data: {json.dumps({'type': 'citation', 'ref': event['ref'], 'context': event['context'], 'hebrew': event['hebrew'], 'english': event['english'], 'book': event.get('book', '')})}\n\n"
                         # Skip 'done' events - we handle that separately
                 except Exception as e:
                     logger.error(f"❌ Citation agent failed, falling back: {e}")
                     async for chunk in generate_response_stream(query, context):
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                            metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                        token_count += len(chunk.split())
                         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
             else:
                 async for chunk in generate_response_stream(query, context):
+                    if first_token_time is None:
+                        first_token_time = time.time()
+                        metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                    token_count += len(chunk.split())
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-            
+
+            llm_end = time.time()
+            metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
+            metrics["counts"]["paragraphs"] = paragraph_count
+            metrics["counts"]["citations"] = citation_count
+            metrics["counts"]["approx_words"] = token_count
+
+            # Calculate total pipeline time
+            pipeline_end = time.time()
+            metrics["durations"]["total_pipeline"] = round((pipeline_end - pipeline_start) * 1000, 2)
+
+            # Calculate throughput
+            if metrics["durations"]["llm_generation"] > 0:
+                metrics["metadata"]["words_per_second"] = round(token_count / (metrics["durations"]["llm_generation"] / 1000), 2)
+
+            # Emit final LLM and summary metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'llm_complete', 'duration_ms': metrics['durations']['llm_generation'], 'details': {'paragraphs': paragraph_count, 'citations': citation_count, 'approx_words': token_count, 'words_per_second': metrics['metadata'].get('words_per_second')}})}\n\n"
+
+            # Emit complete metrics summary
+            yield f"data: {json.dumps({'type': 'metrics_summary', 'total_duration_ms': metrics['durations']['total_pipeline'], 'breakdown': metrics['durations'], 'counts': metrics['counts'], 'metadata': metrics['metadata']})}\n\n"
+
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            
+
+            logger.info(f"✅ Query completed in {metrics['durations']['total_pipeline']:.0f}ms - Embed: {metrics['durations']['embedding']:.0f}ms, Search: {metrics['durations']['vector_search']:.0f}ms, Rerank: {metrics['durations']['reranking']:.0f}ms, Hydrate: {metrics['durations']['hydration']:.0f}ms, LLM: {metrics['durations']['llm_generation']:.0f}ms")
+
         except Exception as e:
             logger.error(f"❌ Stream error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

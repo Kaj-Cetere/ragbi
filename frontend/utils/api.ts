@@ -36,7 +36,7 @@ export interface SefariaText {
   targetVerse?: number;
 }
 
-export type StreamEventType = 'status' | 'sources' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error';
+export type StreamEventType = 'status' | 'sources' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error' | 'metrics' | 'metrics_summary';
 
 export interface CitationEvent {
   ref: string;
@@ -44,6 +44,62 @@ export interface CitationEvent {
   hebrew: string;
   english: string;
   book?: string;
+}
+
+// Performance metrics types
+export interface MetricsDetails {
+  dimensions?: number;
+  chunks_found?: number;
+  similarity_max?: number;
+  similarity_avg?: number;
+  was_reranked?: boolean;
+  chunks_after?: number;
+  top_rerank_score?: number;
+  chunks_hydrated?: number;
+  commentaries_fetched?: number;
+  paragraphs?: number;
+  citations?: number;
+  approx_words?: number;
+  words_per_second?: number;
+}
+
+export interface MetricsBreakdown {
+  embedding?: number;
+  vector_search?: number;
+  reranking?: number;
+  hydration?: number;
+  time_to_first_token?: number;
+  llm_generation?: number;
+  total_pipeline?: number;
+}
+
+export interface MetricsCounts {
+  embedding_dimensions?: number;
+  chunks_retrieved?: number;
+  chunks_after_rerank?: number;
+  chunks_hydrated?: number;
+  commentaries_fetched?: number;
+  context_length?: number;
+  paragraphs?: number;
+  citations?: number;
+  approx_words?: number;
+}
+
+export interface MetricsMetadata {
+  similarity_max?: number;
+  similarity_min?: number;
+  similarity_avg?: number;
+  reranking_applied?: boolean;
+  rerank_score_max?: number;
+  rerank_score_avg?: number;
+  words_per_second?: number;
+}
+
+export interface MetricsSummary {
+  total_duration_ms: number;
+  breakdown: MetricsBreakdown;
+  counts: MetricsCounts;
+  metadata: MetricsMetadata;
 }
 
 export interface StreamEvent {
@@ -57,6 +113,26 @@ export interface StreamEvent {
   hebrew?: string;
   english?: string;
   book?: string;
+  // Metrics-specific fields
+  stage?: string;
+  duration_ms?: number;
+  details?: MetricsDetails;
+  // Metrics summary fields
+  total_duration_ms?: number;
+  breakdown?: MetricsBreakdown;
+  counts?: MetricsCounts;
+  metadata?: MetricsMetadata;
+}
+
+// Frontend performance tracking
+export interface FrontendMetrics {
+  queryStartTime: number;
+  timeToFirstEvent?: number;
+  timeToFirstContent?: number;
+  timeToSources?: number;
+  timeToComplete?: number;
+  eventCount: number;
+  networkLatencyEstimate?: number;
 }
 
 /**
