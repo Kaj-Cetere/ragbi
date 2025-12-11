@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, Search, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -10,7 +10,16 @@ import { CitationCard } from "@/components/CitationCard";
 import { InlineCitation } from "@/components/InlineCitation";
 import { SourcesList } from "@/components/SourcesList";
 import { Sidebar } from "@/components/Sidebar";
-import { streamChat, type Source, type StreamEvent } from "@/utils/api";
+import { PerformanceMetrics, type StageMetric } from "@/components/PerformanceMetrics";
+import {
+  streamChat,
+  type Source,
+  type StreamEvent,
+  type MetricsBreakdown,
+  type MetricsCounts,
+  type MetricsMetadata,
+  type FrontendMetrics,
+} from "@/utils/api";
 
 // Type for response segments (paragraphs and inline citations)
 interface ResponseSegment {
@@ -31,6 +40,14 @@ const SUGGESTIONS = [
   { emoji: "🙏", text: "Modeh Ani" },
   { emoji: "🍷", text: "Four Cups Pesach" },
 ];
+
+// Metrics summary type
+interface MetricsSummary {
+  total_duration_ms: number;
+  breakdown: MetricsBreakdown;
+  counts: MetricsCounts;
+  metadata: MetricsMetadata;
+}
 
 export default function Home() {
   // View state
@@ -53,12 +70,36 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedRef, setSelectedRef] = useState<string | null>(null);
 
+  // Performance metrics state
+  const [metricsVisible, setMetricsVisible] = useState(true);
+  const [stageMetrics, setStageMetrics] = useState<StageMetric[]>([]);
+  const [metricsSummary, setMetricsSummary] = useState<MetricsSummary | null>(null);
+  const [frontendMetrics, setFrontendMetrics] = useState<FrontendMetrics>({
+    queryStartTime: 0,
+    eventCount: 0,
+  });
+
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Handle search submission
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
+
+    // Initialize frontend metrics tracking
+    const queryStartTime = Date.now();
+    let firstEventTime: number | undefined;
+    let firstContentTime: number | undefined;
+    let sourcesTime: number | undefined;
+    let eventCount = 0;
+
+    // Reset metrics state
+    setStageMetrics([]);
+    setMetricsSummary(null);
+    setFrontendMetrics({
+      queryStartTime,
+      eventCount: 0,
+    });
 
     // Transition to results view
     setIsSearching(true);
@@ -69,11 +110,27 @@ export default function Home() {
     setFallbackText("");
     setSources([]);
     setLoadingStatus("Connecting to Library...");
-    
+
     let segmentCounter = 0;
 
     try {
       for await (const event of streamChat(query, true)) {
+        eventCount++;
+        const now = Date.now();
+
+        // Track first event time
+        if (!firstEventTime) {
+          firstEventTime = now;
+        }
+
+        // Update frontend metrics on each event
+        setFrontendMetrics((prev) => ({
+          ...prev,
+          eventCount,
+          timeToFirstEvent: firstEventTime ? firstEventTime - queryStartTime : undefined,
+          networkLatencyEstimate: firstEventTime ? firstEventTime - queryStartTime : undefined,
+        }));
+
         switch (event.type) {
           case "status":
             setLoadingStatus(event.message || "Processing...");
@@ -82,11 +139,25 @@ export default function Home() {
           case "sources":
             if (event.data) {
               setSources(event.data);
+              if (!sourcesTime) {
+                sourcesTime = now;
+                setFrontendMetrics((prev) => ({
+                  ...prev,
+                  timeToSources: sourcesTime! - queryStartTime,
+                }));
+              }
             }
             break;
 
           case "paragraph":
             setIsLoading(false);
+            if (!firstContentTime) {
+              firstContentTime = now;
+              setFrontendMetrics((prev) => ({
+                ...prev,
+                timeToFirstContent: firstContentTime! - queryStartTime,
+              }));
+            }
             if (event.content) {
               const newSegment: ResponseSegment = {
                 id: `seg-${segmentCounter++}`,
@@ -99,6 +170,13 @@ export default function Home() {
 
           case "citation":
             setIsLoading(false);
+            if (!firstContentTime) {
+              firstContentTime = now;
+              setFrontendMetrics((prev) => ({
+                ...prev,
+                timeToFirstContent: firstContentTime! - queryStartTime,
+              }));
+            }
             if (event.ref) {
               const newSegment: ResponseSegment = {
                 id: `seg-${segmentCounter++}`,
@@ -116,19 +194,65 @@ export default function Home() {
           case "chunk":
             // Fallback for legacy streaming
             setIsLoading(false);
+            if (!firstContentTime) {
+              firstContentTime = now;
+              setFrontendMetrics((prev) => ({
+                ...prev,
+                timeToFirstContent: firstContentTime! - queryStartTime,
+              }));
+            }
             if (event.content) {
               setFallbackText((prev) => prev + event.content);
             }
             break;
 
+          case "metrics":
+            // Track individual stage metrics from backend
+            if (event.stage && event.duration_ms !== undefined) {
+              const stageMetric: StageMetric = {
+                stage: event.stage,
+                duration_ms: event.duration_ms,
+                details: event.details as Record<string, unknown>,
+                timestamp: now,
+              };
+              setStageMetrics((prev) => [...prev, stageMetric]);
+            }
+            break;
+
+          case "metrics_summary":
+            // Store complete metrics summary from backend
+            if (event.total_duration_ms !== undefined && event.breakdown && event.counts && event.metadata) {
+              setMetricsSummary({
+                total_duration_ms: event.total_duration_ms,
+                breakdown: event.breakdown,
+                counts: event.counts,
+                metadata: event.metadata,
+              });
+            }
+            break;
+
           case "done":
             setIsComplete(true);
+            // Final frontend metrics update
+            const completeTime = Date.now();
+            setFrontendMetrics((prev) => ({
+              ...prev,
+              timeToComplete: completeTime - queryStartTime,
+              eventCount,
+            }));
             break;
 
           case "error":
             setIsLoading(false);
             setFallbackText(`Error: ${event.message}`);
             setIsComplete(true);
+            // Update metrics on error too
+            const errorTime = Date.now();
+            setFrontendMetrics((prev) => ({
+              ...prev,
+              timeToComplete: errorTime - queryStartTime,
+              eventCount,
+            }));
             break;
         }
       }
@@ -138,6 +262,13 @@ export default function Home() {
         `Error: ${error instanceof Error ? error.message : "Unknown error"}`
       );
       setIsComplete(true);
+      // Update metrics on catch
+      const catchTime = Date.now();
+      setFrontendMetrics((prev) => ({
+        ...prev,
+        timeToComplete: catchTime - queryStartTime,
+        eventCount,
+      }));
     }
   }, []);
 
@@ -411,6 +542,19 @@ export default function Home() {
         onClose={() => setSidebarOpen(false)}
         selectedRef={selectedRef}
       />
+
+      {/* PERFORMANCE METRICS PANEL */}
+      {isSearching && (
+        <PerformanceMetrics
+          stageMetrics={stageMetrics}
+          summary={metricsSummary}
+          frontendMetrics={frontendMetrics}
+          isStreaming={isLoading}
+          isComplete={isComplete}
+          isVisible={metricsVisible}
+          onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
+        />
+      )}
     </div>
   );
 }
