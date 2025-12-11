@@ -450,6 +450,7 @@ async def chat_stream(request: QueryRequest):
             metrics["counts"]["context_length"] = len(context)
 
             llm_start = time.time()
+            actual_llm_start = None  # Track when LLM actually starts (after source cache)
             first_token_time = None
             token_count = 0
             paragraph_count = 0
@@ -458,7 +459,6 @@ async def chat_stream(request: QueryRequest):
             if use_agent:
                 # Use citation agent with paragraph-based streaming
                 try:
-                    actual_llm_start = None  # Track when LLM actually starts (after source cache)
                     async for event in generate_response_with_citations_stream(
                         query=query,
                         context=context,
@@ -507,7 +507,11 @@ async def chat_stream(request: QueryRequest):
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
             llm_end = time.time()
-            metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
+            # Use actual_llm_start if available (excludes source_cache time)
+            if use_agent and actual_llm_start:
+                metrics["durations"]["llm_generation"] = round((llm_end - actual_llm_start) * 1000, 2)
+            else:
+                metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
             metrics["counts"]["paragraphs"] = paragraph_count
             metrics["counts"]["citations"] = citation_count
             metrics["counts"]["approx_words"] = token_count
