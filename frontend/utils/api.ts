@@ -68,6 +68,7 @@ export interface MetricsBreakdown {
   vector_search?: number;
   reranking?: number;
   hydration?: number;
+  source_cache?: number;  // Time to fetch translations from Sefaria
   time_to_first_token?: number;
   llm_generation?: number;
   total_pipeline?: number;

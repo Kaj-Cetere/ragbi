@@ -458,15 +458,28 @@ async def chat_stream(request: QueryRequest):
             if use_agent:
                 # Use citation agent with paragraph-based streaming
                 try:
+                    actual_llm_start = None  # Track when LLM actually starts (after source cache)
                     async for event in generate_response_with_citations_stream(
                         query=query,
                         context=context,
                         retrieved_chunks=hydrated,
                         openrouter_api_key=OPENROUTER_API_KEY
                     ):
-                        if first_token_time is None:
+                        # Handle source cache timing event
+                        if event["type"] == "source_cache_built":
+                            source_cache_time = event.get("duration_ms", 0)
+                            metrics["durations"]["source_cache"] = source_cache_time
+                            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'source_cache', 'duration_ms': source_cache_time, 'details': {'note': 'Fetching translations from Sefaria'}})}\n\n"
+                            actual_llm_start = time.time()  # LLM starts now
+                            continue
+
+                        if first_token_time is None and event["type"] in ("paragraph", "citation"):
                             first_token_time = time.time()
-                            metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                            # Calculate time to first token from actual LLM start
+                            if actual_llm_start:
+                                metrics["durations"]["time_to_first_token"] = round((first_token_time - actual_llm_start) * 1000, 2)
+                            else:
+                                metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
                             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'llm_first_token', 'duration_ms': metrics['durations']['time_to_first_token']})}\n\n"
 
                         if event["type"] == "paragraph":

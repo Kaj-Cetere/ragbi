@@ -84,65 +84,103 @@ def fetch_sefaria_text(ref: str) -> Optional[dict]:
         return None
 
 
-def build_source_cache(hydrated_chunks: list[dict]) -> dict[str, SourceText]:
+def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> dict[str, SourceText]:
     """
     Pre-fetch all source texts from retrieved chunks.
     Returns a dict mapping ref -> SourceText with Hebrew and English.
+
+    Args:
+        hydrated_chunks: List of chunks from retrieval
+        parallel: If True, fetch Sefaria texts in parallel (much faster)
     """
+    import concurrent.futures
+    import time
+
+    cache_start = time.time()
     cache: dict[str, SourceText] = {}
-    
+    refs_to_fetch: list[tuple[str, dict]] = []
+
+    # First pass: collect refs and cache what we already have
     for chunk in hydrated_chunks:
         ref = chunk.get("ref", "")
         if not ref or ref in cache:
             continue
-        
-        # First, try to use content from the chunk itself
-        hebrew = chunk.get("content", "")
-        english = ""
-        
-        # Try to fetch English translation from Sefaria
-        sefaria_data = fetch_sefaria_text(ref)
-        if sefaria_data:
-            # Prefer Sefaria Hebrew if available (might be cleaner)
-            if sefaria_data.get("hebrew"):
-                hebrew = sefaria_data["hebrew"]
-            english = sefaria_data.get("english", "")
-        
-        cache[ref] = SourceText(
-            ref=ref,
-            hebrew=hebrew,
-            english=english,
-            book=chunk.get("book", ""),
-            siman=chunk.get("siman"),
-            seif=chunk.get("seif")
-        )
-        
-        # Also cache commentaries using their actual Sefaria refs
+
+        refs_to_fetch.append((ref, chunk))
+
+        # Also cache commentaries (these don't need Sefaria fetch)
         for comm in chunk.get("commentaries", []):
             commentator = comm.get('commentator', 'Commentary')
             comm_text = comm.get("text", "")
-            comm_ref = comm.get("ref", "")  # Actual Sefaria ref like "Mishnah Berurah 1:1"
-            
+            comm_ref = comm.get("ref", "")
+
             if comm_ref and comm_ref not in cache:
                 cache[comm_ref] = SourceText(
                     ref=comm_ref,
                     hebrew=comm_text,
-                    english="",  # Commentaries often don't have translations
+                    english="",
                     book=commentator
                 )
-            
-            # Also cache with a fallback synthetic ref for backwards compatibility
-            # Format: "SA_ref:Commentator" (e.g., "Shulchan Arukh, Orach Chaim 1:1:Mishnah Berurah")
+
             fallback_ref = f"{ref}:{commentator}"
             if fallback_ref not in cache:
                 cache[fallback_ref] = SourceText(
-                    ref=comm_ref or fallback_ref,  # Prefer actual ref
+                    ref=comm_ref or fallback_ref,
                     hebrew=comm_text,
                     english="",
                     book=commentator
                 )
-    
-    logger.info(f"Built source cache with {len(cache)} entries")
+
+    # Parallel fetch from Sefaria for main refs only
+    if parallel and refs_to_fetch:
+        def fetch_one(ref_chunk_tuple):
+            ref, chunk = ref_chunk_tuple
+            hebrew = chunk.get("content", "")
+            english = ""
+
+            sefaria_data = fetch_sefaria_text(ref)
+            if sefaria_data:
+                if sefaria_data.get("hebrew"):
+                    hebrew = sefaria_data["hebrew"]
+                english = sefaria_data.get("english", "")
+
+            return ref, SourceText(
+                ref=ref,
+                hebrew=hebrew,
+                english=english,
+                book=chunk.get("book", ""),
+                siman=chunk.get("siman"),
+                seif=chunk.get("seif")
+            )
+
+        # Fetch in parallel with max 5 workers
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(fetch_one, refs_to_fetch))
+            for ref, source in results:
+                cache[ref] = source
+    else:
+        # Sequential fallback
+        for ref, chunk in refs_to_fetch:
+            hebrew = chunk.get("content", "")
+            english = ""
+
+            sefaria_data = fetch_sefaria_text(ref)
+            if sefaria_data:
+                if sefaria_data.get("hebrew"):
+                    hebrew = sefaria_data["hebrew"]
+                english = sefaria_data.get("english", "")
+
+            cache[ref] = SourceText(
+                ref=ref,
+                hebrew=hebrew,
+                english=english,
+                book=chunk.get("book", ""),
+                siman=chunk.get("siman"),
+                seif=chunk.get("seif")
+            )
+
+    cache_time = (time.time() - cache_start) * 1000
+    logger.info(f"Built source cache with {len(cache)} entries in {cache_time:.0f}ms (parallel={parallel})")
     return cache
 
 
@@ -214,15 +252,23 @@ async def stream_with_citations(
 ) -> AsyncIterator[dict]:
     """
     Stream LLM response with paragraph-based buffering and citation parsing.
-    
+
     Yields events:
+    - {"type": "source_cache_built", "duration_ms": ...} - Timing for source cache
     - {"type": "paragraph", "content": "text..."} - A complete paragraph
     - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "..."}
     - {"type": "done"}
     """
-    # Step 1: Pre-fetch all source texts
-    source_cache = build_source_cache(hydrated_chunks)
+    import time
+
+    # Step 1: Pre-fetch all source texts (now parallelized)
+    cache_start = time.time()
+    source_cache = build_source_cache(hydrated_chunks, parallel=True)
+    cache_duration = (time.time() - cache_start) * 1000
     source_refs = list(source_cache.keys())
+
+    # Emit source cache timing
+    yield {"type": "source_cache_built", "duration_ms": round(cache_duration, 2)}
     
     # Step 2: Build prompts
     system_prompt, user_prompt = build_citation_prompt(query, context, source_refs)
