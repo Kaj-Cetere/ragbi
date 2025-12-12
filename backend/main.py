@@ -22,6 +22,7 @@ import httpx
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from openrouter import OpenRouter
+from xai_sdk import Client as XAIClient
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+XAI_API_KEY = os.getenv("XAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
@@ -47,8 +49,8 @@ EMBEDDING_MODEL = "google/gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 3072
 RPC_FUNCTION = "match_sefaria_chunks_gemini_contextual"
 
-# Chat Model
-CHAT_MODEL = "x-ai/grok-4.1-fast"
+# Chat Model (using xAI directly)
+CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 
 # RAG Settings
 TOP_K_RETRIEVE_FOR_RERANK = 50
@@ -57,18 +59,20 @@ TOP_K_HYDRATE = 3
 
 # --- GLOBAL CLIENTS ---
 openrouter_client: OpenRouter = None
+xai_client: XAIClient = None
 supabase_client: Client = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize clients on startup."""
-    global openrouter_client, supabase_client
-    
+    global openrouter_client, xai_client, supabase_client
+
     openrouter_client = OpenRouter(api_key=OPENROUTER_API_KEY)
+    xai_client = XAIClient(api_key=XAI_API_KEY)
     supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    
-    logger.info("✅ Initialized API clients")
+
+    logger.info("✅ Initialized API clients (OpenRouter for embeddings, xAI for chat)")
     yield
     logger.info("👋 Shutting down")
 
@@ -256,7 +260,9 @@ def build_context_prompt(hydrated_chunks: list[dict]) -> str:
 
 
 async def generate_response_stream(query: str, context: str) -> AsyncIterator[str]:
-    """Generate streaming LLM response using async httpx."""
+    """Generate streaming LLM response using xAI SDK."""
+    from xai_sdk.chat import user, system
+
     system_prompt = """You are a knowledgeable assistant specializing in Torah texts, particularly the Shulchan Arukh and its classical commentaries.
 
 Your role is to:
@@ -268,9 +274,7 @@ Your role is to:
 
 Important: Base your answers primarily on the provided context. Do not make up sources or rulings."""
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"""Here is relevant context from Torah sources:
+    user_prompt = f"""Here is relevant context from Torah sources:
 
 {context}
 
@@ -278,44 +282,24 @@ Important: Base your answers primarily on the provided context. Do not make up s
 
 User's Question: {query}
 
-Please provide a helpful, accurate response based on the sources above."""}
-    ]
-    
+Please provide a helpful, accurate response based on the sources above."""
+
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://kesher.ai",
-                    "X-Title": "Kesher AI"
-                },
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "max_tokens": 2000,
-                    "stream": True
-                }
-            ) as response:
-                response.raise_for_status()
-                
-                async for line in response.aiter_lines():
-                    if line and line.startswith('data: '):
-                        data = line[6:]
-                        if data == '[DONE]':
-                            break
-                        try:
-                            chunk = json.loads(data)
-                            if 'choices' in chunk and len(chunk['choices']) > 0:
-                                delta = chunk['choices'][0].get('delta', {})
-                                if 'content' in delta:
-                                    yield delta['content']
-                        except json.JSONDecodeError:
-                            continue
-                        
+        # Create chat with xAI
+        chat = xai_client.chat.create(
+            model=CHAT_MODEL,
+            temperature=0.3,
+            max_completion_tokens=2000
+        )
+
+        chat.append(system(system_prompt))
+        chat.append(user(user_prompt))
+
+        # Stream response
+        async for response, chunk in chat.stream():
+            if chunk.content:
+                yield chunk.content
+
     except Exception as e:
         logger.error(f"❌ LLM error: {e}")
         yield f"\n\nError generating response: {e}"
@@ -463,7 +447,7 @@ async def chat_stream(request: QueryRequest):
                         query=query,
                         context=context,
                         retrieved_chunks=hydrated,
-                        openrouter_api_key=OPENROUTER_API_KEY
+                        xai_api_key=XAI_API_KEY
                     ):
                         # Handle source cache timing event
                         if event["type"] == "source_cache_built":

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-CHAT_MODEL = "x-ai/grok-4.1-fast"
+CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 
 
 @dataclass
@@ -248,7 +248,7 @@ async def stream_with_citations(
     query: str,
     context: str,
     hydrated_chunks: list[dict],
-    openrouter_api_key: str
+    xai_api_key: str
 ) -> AsyncIterator[dict]:
     """
     Stream LLM response with paragraph-based buffering and citation parsing.
@@ -260,6 +260,8 @@ async def stream_with_citations(
     - {"type": "done"}
     """
     import time
+    from xai_sdk import Client as XAIClient
+    from xai_sdk.chat import user, system
 
     # Step 1: Pre-fetch all source texts (now parallelized)
     cache_start = time.time()
@@ -269,87 +271,52 @@ async def stream_with_citations(
 
     # Emit source cache timing
     yield {"type": "source_cache_built", "duration_ms": round(cache_duration, 2)}
-    
+
     # Step 2: Build prompts
     system_prompt, user_prompt = build_citation_prompt(query, context, source_refs)
-    
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt}
-    ]
-    
-    # Step 3: Stream from OpenRouter using async httpx
+
+    # Step 3: Stream from xAI
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {openrouter_api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://kesher.ai",
-                    "X-Title": "Kesher AI"
-                },
-                json={
-                    "model": CHAT_MODEL,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "max_tokens": 3000,
-                    "stream": True
-                }
-            ) as response:
-                response.raise_for_status()
-                
-                # Paragraph buffer for streaming
-                buffer = ""
-                
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                        
-                    if not line.startswith('data: '):
-                        continue
-                        
-                    data = line[6:]
-                    if data == '[DONE]':
-                        break
-                        
-                    try:
-                        chunk = json.loads(data)
-                        if 'choices' not in chunk or len(chunk['choices']) == 0:
-                            continue
-                            
-                        delta = chunk['choices'][0].get('delta', {})
-                        content = delta.get('content', '')
-                        
-                        if not content:
-                            continue
-                        
-                        buffer += content
-                        
-                        # Check for paragraph breaks (double newline or single newline for simpler streaming)
-                        # We'll emit on single newlines for responsiveness
-                        while '\n' in buffer:
-                            # Find the line break
-                            idx = buffer.index('\n')
-                            paragraph = buffer[:idx].strip()
-                            buffer = buffer[idx + 1:]
-                            
-                            if paragraph:
-                                # Parse this paragraph for citations and emit
-                                async for event in parse_and_emit_paragraph(paragraph, source_cache):
-                                    yield event
-                                    
-                    except json.JSONDecodeError:
-                        continue
-                
-                # Emit any remaining content in buffer
-                if buffer.strip():
-                    async for event in parse_and_emit_paragraph(buffer.strip(), source_cache):
+        # Create xAI client and chat
+        xai_client = XAIClient(api_key=xai_api_key)
+        chat = xai_client.chat.create(
+            model=CHAT_MODEL,
+            temperature=0.3,
+            max_completion_tokens=3000
+        )
+
+        chat.append(system(system_prompt))
+        chat.append(user(user_prompt))
+
+        # Paragraph buffer for streaming
+        buffer = ""
+
+        async for response, chunk in chat.stream():
+            if not chunk.content:
+                continue
+
+            buffer += chunk.content
+
+            # Check for paragraph breaks (double newline or single newline for simpler streaming)
+            # We'll emit on single newlines for responsiveness
+            while '\n' in buffer:
+                # Find the line break
+                idx = buffer.index('\n')
+                paragraph = buffer[:idx].strip()
+                buffer = buffer[idx + 1:]
+
+                if paragraph:
+                    # Parse this paragraph for citations and emit
+                    async for event in parse_and_emit_paragraph(paragraph, source_cache):
                         yield event
-                
-                yield {"type": "done"}
-        
+
+        # Emit any remaining content in buffer
+        if buffer.strip():
+            async for event in parse_and_emit_paragraph(buffer.strip(), source_cache):
+                yield event
+
+        yield {"type": "done"}
+
     except Exception as e:
         logger.error(f"Stream error: {e}")
         yield {"type": "paragraph", "content": f"Error generating response: {e}"}
@@ -471,17 +438,17 @@ async def generate_response_with_citations_stream(
     query: str,
     context: str,
     retrieved_chunks: list[dict],
-    openrouter_api_key: str
+    xai_api_key: str
 ) -> AsyncIterator[dict]:
     """
     Main entry point for citation-aware response generation.
-    
+
     Args:
         query: User's question
         context: Formatted RAG context
         retrieved_chunks: Hydrated chunks from vector search
-        openrouter_api_key: API key for OpenRouter
-    
+        xai_api_key: API key for xAI
+
     Yields:
         Events for frontend rendering:
         - {"type": "paragraph", "content": "..."}
@@ -492,6 +459,6 @@ async def generate_response_with_citations_stream(
         query=query,
         context=context,
         hydrated_chunks=retrieved_chunks,
-        openrouter_api_key=openrouter_api_key
+        xai_api_key=xai_api_key
     ):
         yield event
