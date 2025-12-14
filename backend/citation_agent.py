@@ -416,12 +416,11 @@ async def parse_and_emit_paragraph(
     For citations: yields {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
     """
     # Updated regex to capture optional excerpt attribute with proper quote handling
-    # Handles Hebrew gershayim (") by supporting both single and double quotes
-    # Preferred: excerpt='...' (allows " inside)
-    # Legacy: excerpt="..." (works if no " inside)
-    # Matches either quote style or no excerpt at all
+    # Handles Hebrew gershayim (") and geresh (') within the excerpt text
+    # Uses negative lookahead to match quotes that aren't the closing delimiter
+    # Pattern: excerpt='...' or excerpt="..." where ... can contain any characters
     cite_pattern = re.compile(
-        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'([^']*)'|"([^"]*)")?)?\s*>(.*?)</cite>''',
+        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'((?:(?!'\s*>).)*)'|"((?:(?!"\s*>).)*)")?)?\s*>(.*?)</cite>''',
         re.DOTALL
     )
 
