@@ -92,18 +92,6 @@ export function InlineCitation({
           >
             {shortTitle}
           </span>
-          {/* Badge indicating excerpt highlighting is active */}
-          {hasHighlight && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded font-semibold"
-              style={{
-                backgroundColor: "var(--color-highlight-bg)",
-                color: "var(--color-accent-primary)",
-              }}
-            >
-              excerpt
-            </span>
-          )}
         </div>
         <button className="p-1" style={{ color: "var(--color-text-light)" }}>
           {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -166,23 +154,12 @@ export function InlineCitation({
             )}
           </div>
 
-          {/* Translation label when excerpt is highlighted */}
-          {hasHighlight && (
-            <div
-              className="text-[10px] font-sans font-semibold uppercase tracking-wider"
-              style={{ color: "var(--color-accent-secondary)" }}
-            >
-              Translation of highlighted portion:
-            </div>
-          )}
-
           {/* English translation / context from LLM */}
           {context && (
             <div
-              className="font-serif text-sm leading-relaxed"
+              className="font-serif text-sm leading-relaxed italic"
               style={{
                 color: "var(--color-text-muted)",
-                fontStyle: hasHighlight ? "normal" : "italic",
               }}
             >
               {context.slice(0, 400)}
