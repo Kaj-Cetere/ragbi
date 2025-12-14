@@ -291,7 +291,8 @@ async def stream_with_citations(
         # Paragraph buffer for streaming
         buffer = ""
 
-        async for response, chunk in chat.stream():
+        # Note: chat.stream() is a sync generator, use regular for loop
+        for response, chunk in chat.stream():
             if not chunk.content:
                 continue
 
