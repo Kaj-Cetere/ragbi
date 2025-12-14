@@ -198,46 +198,54 @@ def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> t
 
 CITATION FORMAT:
 When citing a source, use this XML tag format:
-<cite ref="EXACT_REFERENCE" excerpt="HEBREW_EXCERPT">ENGLISH_TRANSLATION</cite>
+<cite ref="EXACT_REFERENCE">ENGLISH_TRANSLATION</cite>
+OR for partial excerpts:
+<cite ref="EXACT_REFERENCE" excerpt='HEBREW_EXCERPT'>ENGLISH_TRANSLATION</cite>
 
-ATTRIBUTES:
-- ref: The exact reference string from AVAILABLE REFERENCES (required)
-- excerpt: The specific Hebrew phrase you are translating (REQUIRED when translating only part of the source)
+IMPORTANT - USE SINGLE QUOTES FOR EXCERPT:
+When including an excerpt, use SINGLE QUOTES (') around the Hebrew text, not double quotes (")
+This is critical because Hebrew text often contains quotation marks (gershayim) as punctuation.
 
-WHEN TO USE EXCERPT:
-- ALWAYS include excerpt when you are translating only a PORTION of the source text
-- The excerpt helps users see exactly which Hebrew words correspond to your translation
-- Copy the Hebrew text EXACTLY as it appears in the source
-- Include at least 3-4 Hebrew words for accurate matching
+TRANSLATION PHILOSOPHY - PREFER COMPLETENESS:
+- DEFAULT: Translate the ENTIRE source text whenever possible
+- Only use excerpt when the source is very long (50+ words) AND you only need a specific portion
+- If you're translating most of the source anyway, just translate ALL of it (no excerpt)
+- Excerpts should be substantial - at least 8-10 words minimum
+- Never use tiny excerpts (2-3 words) - either translate the whole thing or a meaningful chunk
 
-WHEN TO OMIT EXCERPT:
-- Only omit excerpt when translating the ENTIRE source text
-- If the source is short (under 10 words) and you're translating all of it
+WHEN TO OMIT EXCERPT (most common):
+1. The source is reasonably short (under 50 words) - just translate everything
+2. You're explaining the main point of the source - translate it fully
+3. The source is from Shulchan Arukh and is a single seif - translate the whole seif
+4. You're citing a commentary - give the full explanation
+
+WHEN TO USE EXCERPT (rare):
+1. The source is very long (50+ words) and you only need one specific portion
+2. You're highlighting a particular phrase within a lengthy passage
+3. The excerpt must be AT LEAST 8-10 words to be meaningful
 
 EXAMPLES:
 
-1. Translating a specific phrase from a long Shulchan Arukh seif:
-   <cite ref="Shulchan Arukh, Orach Chayim 1:1" excerpt="יתגבר כארי לעמוד בבוקר">One should strengthen himself like a lion to arise in the morning</cite>
+1. Full translation (NO EXCERPT - preferred):
+   <cite ref="Shulchan Arukh, Orach Chayim 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
 
-2. Translating an entire short seif (no excerpt needed):
-   <cite ref="Shulchan Arukh, Orach Chayim 1:2">The complete seif translated here</cite>
+2. Long source with specific excerpt (use SINGLE QUOTES):
+   <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר וצריכין להביא עמהם שתי לחמים'>People eat dairy foods and then meat foods, and must bring two breads with them</cite>
 
-3. Mishnah Berurah - translating specific explanation:
-   <cite ref="Mishnah Berurah 1:1" excerpt="שלא יתבייש מפני בני אדם המלעיגים עליו">so that one should not be embarrassed before people who mock him</cite>
-
-4. Ba'er Hetev - highlighting key phrase:
-   <cite ref="Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:1" excerpt="אפילו יצרו מסיתו">even if his evil inclination persuades him</cite>
+3. Full Mishnah Berurah explanation (NO EXCERPT):
+   <cite ref="Mishnah Berurah 1:1">The reason is so that one should not be embarrassed before people who mock him for his piety</cite>
 
 CRITICAL RULES:
 1. Use EXACT reference strings from the AVAILABLE REFERENCES list
-2. The excerpt must be EXACT Hebrew text from the source - copy it precisely
-3. ALWAYS include excerpt when translating partial text (this is essential for user experience)
-4. Provide clear, accurate ENGLISH TRANSLATIONS of the Hebrew
-5. Each source should be cited at most once
-6. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary
-7. Write in flowing paragraphs with line breaks between ideas
-8. Always cite sources when stating halachic rulings
-9. If the context doesn't contain enough information, say so clearly
+2. When using excerpt: Use SINGLE QUOTES (') not double quotes (")
+3. PREFER full translations - only use excerpt for genuinely long sources
+4. Excerpts must be substantial (8-10 words minimum) and meaningful
+5. Provide complete, accurate ENGLISH TRANSLATIONS of the Hebrew
+6. Each source should be cited at most once
+7. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary
+8. Write in flowing paragraphs with line breaks between ideas
+9. Always cite sources when stating halachic rulings
+10. If the context doesn't contain enough information, say so clearly
 
 STRUCTURE:
 - Start with a brief introduction
@@ -258,8 +266,13 @@ AVAILABLE REFERENCES (use these exact strings for citations):
 
 USER'S QUESTION: {query}
 
-Please provide a helpful, accurate response with citations using the <cite ref="..." excerpt="...">translation</cite> format.
-Remember: ALWAYS include the excerpt attribute when translating only part of a source."""
+Please provide a helpful, accurate response with citations.
+
+REMINDER:
+- Prefer translating FULL sources (no excerpt) whenever possible
+- Only use excerpt for very long sources (50+ words)
+- When using excerpt, use SINGLE QUOTES: excerpt='...' not excerpt="..."
+- Excerpts must be substantial (8-10 words minimum)"""
 
     return system_prompt, user_prompt
 
@@ -402,11 +415,13 @@ async def parse_and_emit_paragraph(
     For text segments: yields {"type": "paragraph", "content": "..."}
     For citations: yields {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
     """
-    # Updated regex to capture optional excerpt attribute
-    # Matches: <cite ref="..." excerpt="...">content</cite>
-    # Or: <cite ref="...">content</cite>
+    # Updated regex to capture optional excerpt attribute with proper quote handling
+    # Handles Hebrew gershayim (") by supporting both single and double quotes
+    # Preferred: excerpt='...' (allows " inside)
+    # Legacy: excerpt="..." (works if no " inside)
+    # Matches either quote style or no excerpt at all
     cite_pattern = re.compile(
-        r'<cite\s+ref="([^"]+)"(?:\s+excerpt="([^"]*)")?\s*>(.*?)</cite>',
+        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'([^']*)'|"([^"]*)")?)?\s*>(.*?)</cite>''',
         re.DOTALL
     )
 
@@ -419,9 +434,13 @@ async def parse_and_emit_paragraph(
             yield {"type": "paragraph", "content": before_text}
 
         # Extract citation details
+        # Group 1: ref
+        # Group 2: excerpt with single quotes (or None)
+        # Group 3: excerpt with double quotes (or None)
+        # Group 4: context text
         ref = match.group(1)
-        hebrew_excerpt = match.group(2)  # May be None if not provided
-        context_text = match.group(3).strip()
+        hebrew_excerpt = match.group(2) or match.group(3)  # Take whichever is not None
+        context_text = match.group(4).strip()
 
         # Look up the source in cache
         source = source_cache.get(ref)
