@@ -44,6 +44,7 @@ export interface CitationEvent {
   hebrew: string;
   english: string;
   book?: string;
+  hebrew_excerpt?: string;  // NEW: The specific Hebrew portion being translated
 }
 
 // Performance metrics types
@@ -114,6 +115,7 @@ export interface StreamEvent {
   hebrew?: string;
   english?: string;
   book?: string;
+  hebrew_excerpt?: string;  // NEW: The specific Hebrew portion being translated
   // Metrics-specific fields
   stage?: string;
   duration_ms?: number;
