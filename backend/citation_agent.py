@@ -206,34 +206,44 @@ IMPORTANT - USE SINGLE QUOTES FOR EXCERPT:
 When including an excerpt, use SINGLE QUOTES (') around the Hebrew text, not double quotes (")
 This is critical because Hebrew text often contains quotation marks (gershayim) as punctuation.
 
-TRANSLATION PHILOSOPHY - PREFER COMPLETENESS:
-- DEFAULT: Translate the ENTIRE source text whenever possible
-- Only use excerpt when the source is very long (50+ words) AND you only need a specific portion
-- If you're translating most of the source anyway, just translate ALL of it (no excerpt)
-- Excerpts should be substantial - at least 8-10 words minimum
-- Never use tiny excerpts (2-3 words) - either translate the whole thing or a meaningful chunk
+TRANSLATION PHILOSOPHY - TRANSLATE WHAT'S RELEVANT:
+- GOAL: Translate the ENTIRE portion of the source that is RELEVANT to your point
+- Sometimes the entire source is relevant - translate it all (no excerpt)
+- Often only PART of the source is relevant - use excerpt to translate just that portion
+- Be FLEXIBLE: The key question is "what part of this source supports my point?"
+- When using excerpt, be LIBERAL and GENEROUS - include the full relevant portion
+- Excerpts should be substantial (typically 10-20+ words) to give proper context
+- NEVER use tiny excerpts (under 8 words) - either quote more generously or cite the whole source
 
-WHEN TO OMIT EXCERPT (most common):
-1. The source is reasonably short (under 50 words) - just translate everything
-2. You're explaining the main point of the source - translate it fully
-3. The source is from Shulchan Arukh and is a single seif - translate the whole seif
-4. You're citing a commentary - give the full explanation
+GUIDING PRINCIPLE - RELEVANCE OVER LENGTH:
+Don't base your decision on the total length of the source.
+Base it on how much of the source is actually relevant to your answer.
 
-WHEN TO USE EXCERPT (rare):
-1. The source is very long (50+ words) and you only need one specific portion
-2. You're highlighting a particular phrase within a lengthy passage
-3. The excerpt must be AT LEAST 8-10 words to be meaningful
+EXAMPLES OF GOOD EXCERPT USAGE:
+1. A seif discusses 5 different laws, but you only need 1 law → Use excerpt for that specific law
+2. A Mishnah Berurah has a long explanation, but only the middle portion relates to your point → Excerpt that portion generously
+3. You need to highlight a specific ruling within a longer passage → Excerpt the ruling with surrounding context
+4. Half of a source is relevant, half is not → Excerpt the relevant half
+
+WHEN TO TRANSLATE THE FULL SOURCE (no excerpt):
+1. The ENTIRE source is relevant to your point - don't artificially limit it
+2. Most or all of the source supports what you're saying - include it all
+3. The source is inherently short (a brief statement) - no need to excerpt
+4. You're giving the full context of a ruling or explanation
 
 EXAMPLES:
 
-1. Full translation (NO EXCERPT - preferred):
+1. FULL translation when entire source is relevant (NO EXCERPT):
    <cite ref="Shulchan Arukh, Orach Chayim 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
 
-2. Long source with specific excerpt (use SINGLE QUOTES):
-   <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר וצריכין להביא עמהם שתי לחמים'>People eat dairy foods and then meat foods, and must bring two breads with them</cite>
+2. EXCERPT when only part is relevant (note: generous 15+ word excerpt with SINGLE QUOTES):
+   <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר וצריכין להביא עמהם שתי לחמים ולהמתין בין חלב לבשר כדי שיעשה קינוח והדחה'>People eat dairy foods and then meat foods, and must bring two breads with them and wait between dairy and meat in order to perform rinsing and cleansing</cite>
 
-3. Full Mishnah Berurah explanation (NO EXCERPT):
+3. FULL translation when the entire commentary is relevant (NO EXCERPT):
    <cite ref="Mishnah Berurah 1:1">The reason is so that one should not be embarrassed before people who mock him for his piety</cite>
+
+4. EXCERPT when half the source is relevant (use a generous, complete portion):
+   <cite ref="Shulchan Arukh, Orach Chayim 156:1" excerpt='אם אכל דבר שאינו קובע אכילה די בנטילת ידיו או במשמוש מפה ואכילת פת או מאכלי חלב'>If one ate something that is not a fixed meal, hand washing or wiping with a cloth is sufficient, along with eating bread or dairy foods</cite>
 
 CRITICAL RULES:
 1. Use EXACT reference strings from the AVAILABLE REFERENCES list
@@ -269,10 +279,11 @@ USER'S QUESTION: {query}
 Please provide a helpful, accurate response with citations.
 
 REMINDER:
-- Prefer translating FULL sources (no excerpt) whenever possible
-- Only use excerpt for very long sources (50+ words)
+- Translate the ENTIRE portion of each source that is RELEVANT to your point
+- Use excerpt when only PART of a source is relevant (often half or a few sentences)
+- Be LIBERAL and GENEROUS with excerpts - include full context (typically 10-20+ words)
 - When using excerpt, use SINGLE QUOTES: excerpt='...' not excerpt="..."
-- Excerpts must be substantial (8-10 words minimum)"""
+- If the entire source is relevant, translate it all (no excerpt needed)"""
 
     return system_prompt, user_prompt
 
