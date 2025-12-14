@@ -295,8 +295,8 @@ Please provide a helpful, accurate response based on the sources above."""
         chat.append(system(system_prompt))
         chat.append(user(user_prompt))
 
-        # Stream response
-        async for response, chunk in chat.stream():
+        # Stream response (note: chat.stream() is a sync generator)
+        for response, chunk in chat.stream():
             if chunk.content:
                 yield chunk.content
 
