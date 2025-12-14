@@ -472,7 +472,15 @@ async def chat_stream(request: QueryRequest):
                             yield f"data: {json.dumps({'type': 'paragraph', 'content': event['content']})}\n\n"
                         elif event["type"] == "citation":
                             citation_count += 1
-                            yield f"data: {json.dumps({'type': 'citation', 'ref': event['ref'], 'context': event['context'], 'hebrew': event['hebrew'], 'english': event['english'], 'book': event.get('book', '')})}\n\n"
+                            yield f"data: {json.dumps({
+                                'type': 'citation',
+                                'ref': event['ref'],
+                                'context': event['context'],
+                                'hebrew': event['hebrew'],
+                                'english': event['english'],
+                                'book': event.get('book', ''),
+                                'hebrew_excerpt': event.get('hebrew_excerpt')  # NEW: Pass hebrew excerpt for highlighting
+                            })}\n\n"
                         # Skip 'done' events - we handle that separately
                 except Exception as e:
                     logger.error(f"❌ Citation agent failed, falling back: {e}")

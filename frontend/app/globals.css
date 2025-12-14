@@ -1090,3 +1090,145 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   HEBREW EXCERPT HIGHLIGHTING STYLES
+
+   Add these styles to support the Hebrew excerpt highlighting feature
+   in citation cards.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Highlighted Hebrew text in citations */
+.hebrew-highlight {
+  background-color: var(--color-highlight-bg);
+  border-radius: 3px;
+  padding: 2px 4px;
+  /* Handle text that wraps across lines */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background-color 0.2s ease;
+}
+
+/* Slightly darker on hover to indicate interactivity */
+.hebrew-highlight:hover {
+  background-color: rgba(217, 119, 87, 0.2);
+}
+
+/* Pulse animation for newly rendered highlights */
+@keyframes highlightPulse {
+  0% {
+    background-color: rgba(217, 119, 87, 0.35);
+  }
+  50% {
+    background-color: rgba(217, 119, 87, 0.18);
+  }
+  100% {
+    background-color: rgba(217, 119, 87, 0.12);
+  }
+}
+
+.hebrew-highlight-animate {
+  animation: highlightPulse 1s ease-out;
+}
+
+/* Excerpt badge shown in citation header */
+.excerpt-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--color-highlight-bg);
+  color: var(--color-accent-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Show more/less button for Hebrew text expansion */
+.hebrew-expand-btn {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 14px;
+  color: var(--color-accent-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: color 0.2s ease;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.hebrew-expand-btn:hover {
+  color: var(--color-accent-primary);
+}
+
+/* Translation label that appears above the English when excerpt is highlighted */
+.translation-label {
+  font-size: 10px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-accent-secondary);
+  margin-bottom: 4px;
+}
+
+/* Enhanced citation card when excerpt highlighting is active */
+.citation-card-highlighted {
+  border-left-color: var(--color-accent-primary);
+  border-left-width: 4px;
+}
+
+/* Smooth scroll behavior for when we auto-scroll to highlighted content */
+.citation-content-scroll {
+  scroll-behavior: smooth;
+}
+
+/* RTL-specific adjustments for the highlight */
+[dir="rtl"] .hebrew-highlight,
+.he .hebrew-highlight {
+  /* Ensure proper padding direction for RTL text */
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+/* Ellipsis styling for truncated text */
+.hebrew-ellipsis {
+  color: var(--color-text-light);
+  font-weight: normal;
+}
+
+/* Container for Hebrew text with consistent styling */
+.hebrew-text-container {
+  font-family: var(--font-hebrew);
+  direction: rtl;
+  text-align: right;
+  line-height: 1.8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .hebrew-highlight {
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+
+  .excerpt-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+
+  .translation-label {
+    font-size: 9px;
+  }
+}
+
+/* Dark mode support (if you implement dark mode later) */
+@media (prefers-color-scheme: dark) {
+  .hebrew-highlight {
+    background-color: rgba(217, 119, 87, 0.25);
+  }
+
+  .hebrew-highlight:hover {
+    background-color: rgba(217, 119, 87, 0.35);
+  }
+}

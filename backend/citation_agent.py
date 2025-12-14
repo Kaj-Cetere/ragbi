@@ -3,9 +3,10 @@ Citation Agent for Torah AI
 
 A cleaner approach to citations that:
 1. Pre-fetches seifim with Hebrew text and English translation
-2. Uses XML-style <cite> tags in the LLM response
+2. Uses XML-style <cite> tags with optional excerpt attribute for partial translations
 3. Streams paragraph-by-paragraph (on line breaks) for smooth animations
 4. Parses and hydrates citations with actual source text and translation
+5. Supports highlighting specific Hebrew excerpts that correspond to translations
 """
 
 import os
@@ -187,38 +188,56 @@ def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> di
 def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> tuple[str, str]:
     """
     Build system and user prompts that instruct the LLM to use <cite> tags.
+    Now includes excerpt attribute for partial translations.
     Returns (system_prompt, user_prompt).
     """
     # Format available references for the prompt (include more to cover commentaries)
     refs_list = "\n".join(f"- {ref}" for ref in source_refs[:25])
-    
+
     system_prompt = """You are a Torah scholar assistant specializing in Shulchan Arukh and its commentaries.
 
 CITATION FORMAT:
-When you want to cite a source, use this XML tag format:
-<cite ref="EXACT_REFERENCE">CONTENT</cite>
+When citing a source, use this XML tag format:
+<cite ref="EXACT_REFERENCE" excerpt="HEBREW_EXCERPT">ENGLISH_TRANSLATION</cite>
 
-CRITICAL - CONTENT RULES BY SOURCE TYPE:
-1. For SHULCHAN ARUKH citations: Provide a clear, accurate ENGLISH TRANSLATION of the Shulchan Arukh's Hebrew words.
-   Example: The Shulchan Arukh explains that <cite ref="Shulchan Arukh, Orach Chayim 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
+ATTRIBUTES:
+- ref: The exact reference string from AVAILABLE REFERENCES (required)
+- excerpt: The specific Hebrew phrase you are translating (REQUIRED when translating only part of the source)
 
-2. For MISHNAH BERURAH citations: Provide a clear ENGLISH TRANSLATION of the Mishnah Berurah's Hebrew words.
-   Example: The Mishnah Berurah explains that the purpose is to increase in joy. <cite ref="Mishnah Berurah 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
+WHEN TO USE EXCERPT:
+- ALWAYS include excerpt when you are translating only a PORTION of the source text
+- The excerpt helps users see exactly which Hebrew words correspond to your translation
+- Copy the Hebrew text EXACTLY as it appears in the source
+- Include at least 3-4 Hebrew words for accurate matching
 
-3. For BA'ER HETEV citations: Provide a clear ENGLISH TRANSLATION of the Ba'er Hetev's Hebrew words.
-   Example: The Ba'er Hetev adds that this applies even when <cite ref="Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:1">This means that even if the evil inclination persuades him to stay in bed</cite>
+WHEN TO OMIT EXCERPT:
+- Only omit excerpt when translating the ENTIRE source text
+- If the source is short (under 10 words) and you're translating all of it
 
-IMPORTANT RULES:
-1. Use the EXACT reference strings provided in the AVAILABLE REFERENCES list (copy-paste them exactly)
-2. Commentaries have their own reference format from Sefaria:
-   - Mishnah Berurah: "Mishnah Berurah {siman}:{seif_katan}" (e.g., "Mishnah Berurah 1:3")
-   - Ba'er Hetev: "Ba'er Hetev on Shulchan Arukh, Orach Chayim {siman}:{seif_katan}"
-3. For ALL sources (Shulchan Arukh, Mishnah Berurah, and Ba'er Hetev): TRANSLATE the Hebrew text faithfully and accurately
-4. Each source should be cited at most once
-5. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary for the answer
-6. Write in flowing paragraphs with line breaks between ideas
-7. Always cite sources when stating halachic rulings
-8. If the context doesn't contain enough information, say so clearly
+EXAMPLES:
+
+1. Translating a specific phrase from a long Shulchan Arukh seif:
+   <cite ref="Shulchan Arukh, Orach Chayim 1:1" excerpt="יתגבר כארי לעמוד בבוקר">One should strengthen himself like a lion to arise in the morning</cite>
+
+2. Translating an entire short seif (no excerpt needed):
+   <cite ref="Shulchan Arukh, Orach Chayim 1:2">The complete seif translated here</cite>
+
+3. Mishnah Berurah - translating specific explanation:
+   <cite ref="Mishnah Berurah 1:1" excerpt="שלא יתבייש מפני בני אדם המלעיגים עליו">so that one should not be embarrassed before people who mock him</cite>
+
+4. Ba'er Hetev - highlighting key phrase:
+   <cite ref="Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:1" excerpt="אפילו יצרו מסיתו">even if his evil inclination persuades him</cite>
+
+CRITICAL RULES:
+1. Use EXACT reference strings from the AVAILABLE REFERENCES list
+2. The excerpt must be EXACT Hebrew text from the source - copy it precisely
+3. ALWAYS include excerpt when translating partial text (this is essential for user experience)
+4. Provide clear, accurate ENGLISH TRANSLATIONS of the Hebrew
+5. Each source should be cited at most once
+6. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary
+7. Write in flowing paragraphs with line breaks between ideas
+8. Always cite sources when stating halachic rulings
+9. If the context doesn't contain enough information, say so clearly
 
 STRUCTURE:
 - Start with a brief introduction
@@ -239,7 +258,8 @@ AVAILABLE REFERENCES (use these exact strings for citations):
 
 USER'S QUESTION: {query}
 
-Please provide a helpful, accurate response with citations using the <cite ref="...">explanation</cite> format."""
+Please provide a helpful, accurate response with citations using the <cite ref="..." excerpt="...">translation</cite> format.
+Remember: ALWAYS include the excerpt attribute when translating only part of a source."""
 
     return system_prompt, user_prompt
 
@@ -256,7 +276,7 @@ async def stream_with_citations(
     Yields events:
     - {"type": "source_cache_built", "duration_ms": ...} - Timing for source cache
     - {"type": "paragraph", "content": "text..."} - A complete paragraph
-    - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "..."}
+    - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
     - {"type": "done"}
     """
     import time
@@ -328,7 +348,7 @@ def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Opt
     """
     Find the best matching source for a reference that isn't in the cache.
     Handles various reference formats intelligently.
-    
+
     Priority:
     1. Look for similar Sefaria refs (e.g., "Mishnah Berurah 1:1" for "Mishnah Berurah 1:2")
     2. Match by book name for any seif in that siman
@@ -339,7 +359,7 @@ def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Opt
     # - "Mishnah Berurah 1:3"
     # - "Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:3"
     # - "Shulchan Arukh, Orach Chayim 1:1"
-    
+
     # Strategy 1: Find any ref from the same book in the same siman
     # Extract siman number from ref
     siman_match = re.search(r'(\d+):\d+$', ref)
@@ -347,12 +367,12 @@ def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Opt
         siman = siman_match.group(1)
         # Find book name (everything before the numbers)
         book_part = re.sub(r'\s*\d+:\d+$', '', ref)
-        
+
         # Look for any cached ref from the same book and siman
         for cached_ref, cached_source in source_cache.items():
             if cached_ref.startswith(book_part) and f" {siman}:" in cached_ref:
                 return cached_source
-    
+
     # Strategy 2: Match by book title alone (first available)
     for cached_ref, cached_source in source_cache.items():
         # Check if the book name matches
@@ -362,12 +382,12 @@ def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Opt
             return cached_source
         if "Shulchan Arukh" in ref and cached_ref.startswith("Shulchan Arukh"):
             return cached_source
-    
+
     # Strategy 3: Try partial match
     for cached_ref, cached_source in source_cache.items():
         if ref in cached_ref or cached_ref in ref:
             return cached_source
-    
+
     return None
 
 
@@ -377,28 +397,35 @@ async def parse_and_emit_paragraph(
 ) -> AsyncIterator[dict]:
     """
     Parse a paragraph for <cite> tags and emit appropriate events.
-    
+    Now supports excerpt attribute for Hebrew highlighting.
+
     For text segments: yields {"type": "paragraph", "content": "..."}
-    For citations: yields {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "..."}
+    For citations: yields {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
     """
-    # Regex to find <cite ref="...">...</cite> tags
-    cite_pattern = re.compile(r'<cite\s+ref="([^"]+)">(.*?)</cite>', re.DOTALL)
-    
+    # Updated regex to capture optional excerpt attribute
+    # Matches: <cite ref="..." excerpt="...">content</cite>
+    # Or: <cite ref="...">content</cite>
+    cite_pattern = re.compile(
+        r'<cite\s+ref="([^"]+)"(?:\s+excerpt="([^"]*)")?\s*>(.*?)</cite>',
+        re.DOTALL
+    )
+
     last_end = 0
-    
+
     for match in cite_pattern.finditer(text):
         # Emit any text before this citation
         before_text = text[last_end:match.start()].strip()
         if before_text:
             yield {"type": "paragraph", "content": before_text}
-        
+
         # Extract citation details
         ref = match.group(1)
-        context_text = match.group(2).strip()
-        
+        hebrew_excerpt = match.group(2)  # May be None if not provided
+        context_text = match.group(3).strip()
+
         # Look up the source in cache
         source = source_cache.get(ref)
-        
+
         if source:
             yield {
                 "type": "citation",
@@ -406,12 +433,13 @@ async def parse_and_emit_paragraph(
                 "context": context_text,
                 "hebrew": source.hebrew,
                 "english": source.english,
-                "book": source.book
+                "book": source.book,
+                "hebrew_excerpt": hebrew_excerpt  # NEW: Pass excerpt to frontend
             }
         else:
             # Source not in cache - try smart matching for commentary subsections
             matched_source = find_best_source_match(ref, source_cache)
-            
+
             if matched_source:
                 yield {
                     "type": "citation",
@@ -419,14 +447,16 @@ async def parse_and_emit_paragraph(
                     "context": context_text,
                     "hebrew": matched_source.hebrew,
                     "english": matched_source.english,
-                    "book": matched_source.book
+                    "book": matched_source.book,
+                    "hebrew_excerpt": hebrew_excerpt  # NEW: Pass excerpt to frontend
                 }
             else:
                 # Fallback: emit as a paragraph with the citation inline
+                logger.warning(f"Citation ref not found in cache: {ref}")
                 yield {"type": "paragraph", "content": f"{context_text} ({ref})"}
-        
+
         last_end = match.end()
-    
+
     # Emit any remaining text after the last citation
     remaining = text[last_end:].strip()
     if remaining:
@@ -453,7 +483,7 @@ async def generate_response_with_citations_stream(
     Yields:
         Events for frontend rendering:
         - {"type": "paragraph", "content": "..."}
-        - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "..."}
+        - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
         - {"type": "done"}
     """
     async for event in stream_with_citations(
