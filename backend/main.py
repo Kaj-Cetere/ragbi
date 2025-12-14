@@ -289,7 +289,7 @@ Please provide a helpful, accurate response based on the sources above."""
         chat = xai_client.chat.create(
             model=CHAT_MODEL,
             temperature=0.3,
-            max_completion_tokens=2000
+            max_tokens=2000
         )
 
         chat.append(system(system_prompt))

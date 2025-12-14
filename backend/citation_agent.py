@@ -282,7 +282,7 @@ async def stream_with_citations(
         chat = xai_client.chat.create(
             model=CHAT_MODEL,
             temperature=0.3,
-            max_completion_tokens=3000
+            max_tokens=3000
         )
 
         chat.append(system(system_prompt))
