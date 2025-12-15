@@ -138,7 +138,10 @@ async def translate_source(
         ],
         "temperature": 0.2,  # Low temp for consistent translations
         "max_tokens": 2000,
-        "stream": False  # Non-streaming for clean output
+        "stream": False,  # Non-streaming for clean output
+        "provider": {
+            "order": ["mistral"]  # Prioritize Mistral provider
+        }
     }
 
     try:
