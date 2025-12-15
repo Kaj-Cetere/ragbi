@@ -12,13 +12,14 @@ import {
 
 interface InlineCitationProps {
   ref_: string;
-  context: string;
+  context: string;        // NOW: This is the Mistral translation
   hebrew: string;
-  english: string;
+  english: string;        // Sefaria translation (optional reference)
   book?: string;
   hebrew_excerpt?: string; // The specific Hebrew portion being translated
   index: number;
   onClick?: () => void;
+  translation_success?: boolean;  // Track if translation worked
 }
 
 export function InlineCitation({
@@ -30,6 +31,7 @@ export function InlineCitation({
   hebrew_excerpt,
   index,
   onClick,
+  translation_success = true,
 }: InlineCitationProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showFullHebrew, setShowFullHebrew] = useState(false);
@@ -37,6 +39,11 @@ export function InlineCitation({
 
   // Extract a short title from the ref
   const shortTitle = ref_.split(",").slice(0, 2).join(",");
+
+  // Use dedicated translation, fall back to Sefaria if translation failed
+  const displayTranslation = translation_success && context
+    ? context
+    : english || "Translation unavailable";
 
   // Process Hebrew text with highlighting
   const hebrewHighlightResult = useMemo(() => {
@@ -62,7 +69,7 @@ export function InlineCitation({
 
   // Check if translation is truncated
   const TRANSLATION_CHAR_LIMIT = 400;
-  const isTranslationTruncated = context && context.length > TRANSLATION_CHAR_LIMIT;
+  const isTranslationTruncated = displayTranslation && displayTranslation.length > TRANSLATION_CHAR_LIMIT;
 
   return (
     <motion.div
@@ -159,8 +166,8 @@ export function InlineCitation({
             )}
           </div>
 
-          {/* English translation / context from LLM */}
-          {context && (
+          {/* English translation (from dedicated Mistral translation or Sefaria fallback) */}
+          {displayTranslation && (
             <div
               className="font-serif text-sm leading-relaxed italic"
               style={{
@@ -168,8 +175,8 @@ export function InlineCitation({
               }}
             >
               {showFullTranslation
-                ? context
-                : context.slice(0, TRANSLATION_CHAR_LIMIT)}
+                ? displayTranslation
+                : displayTranslation.slice(0, TRANSLATION_CHAR_LIMIT)}
               {!showFullTranslation && isTranslationTruncated && "..."}
               {isTranslationTruncated && (
                 <button

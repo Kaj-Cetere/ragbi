@@ -447,7 +447,8 @@ async def chat_stream(request: QueryRequest):
                         query=query,
                         context=context,
                         retrieved_chunks=hydrated,
-                        xai_api_key=XAI_API_KEY
+                        xai_api_key=XAI_API_KEY,
+                        openrouter_api_key=OPENROUTER_API_KEY
                     ):
                         # Handle source cache timing event
                         if event["type"] == "source_cache_built":
@@ -479,7 +480,8 @@ async def chat_stream(request: QueryRequest):
                                 'hebrew': event['hebrew'],
                                 'english': event['english'],
                                 'book': event.get('book', ''),
-                                'hebrew_excerpt': event.get('hebrew_excerpt')  # NEW: Pass hebrew excerpt for highlighting
+                                'hebrew_excerpt': event.get('hebrew_excerpt'),
+                                'translation_success': event.get('translation_success', True)
                             })}\n\n"
                         # Skip 'done' events - we handle that separately
                 except Exception as e:

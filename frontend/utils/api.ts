@@ -40,11 +40,12 @@ export type StreamEventType = 'status' | 'sources' | 'chunk' | 'paragraph' | 'ci
 
 export interface CitationEvent {
   ref: string;
-  context: string;
+  context: string;       // Now: Mistral's translation
   hebrew: string;
-  english: string;
+  english: string;       // Sefaria's translation (reference)
   book?: string;
-  hebrew_excerpt?: string;  // NEW: The specific Hebrew portion being translated
+  hebrew_excerpt?: string;  // The specific Hebrew portion being translated
+  translation_success?: boolean;  // Whether the dedicated translation succeeded
 }
 
 // Performance metrics types
@@ -115,7 +116,8 @@ export interface StreamEvent {
   hebrew?: string;
   english?: string;
   book?: string;
-  hebrew_excerpt?: string;  // NEW: The specific Hebrew portion being translated
+  hebrew_excerpt?: string;  // The specific Hebrew portion being translated
+  translation_success?: boolean;  // Whether the dedicated translation succeeded
   // Metrics-specific fields
   stage?: string;
   duration_ms?: number;
