@@ -26,13 +26,14 @@ CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 
 @dataclass
 class SourceText:
-    """Pre-fetched source text with Hebrew and English."""
+    """Pre-fetched source text with Hebrew and optional English."""
     ref: str
     hebrew: str
-    english: str
+    english: str  # Sefaria's translation (may be empty)
     book: str
     siman: Optional[int] = None
     seif: Optional[int] = None
+    context_text: Optional[str] = None  # AI-generated context snippet
 
 
 def fetch_sefaria_text(ref: str) -> Optional[dict]:
@@ -151,7 +152,8 @@ def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> di
                 english=english,
                 book=chunk.get("book", ""),
                 siman=chunk.get("siman"),
-                seif=chunk.get("seif")
+                seif=chunk.get("seif"),
+                context_text=chunk.get("context_text")
             )
 
         # Fetch in parallel with max 5 workers
@@ -177,7 +179,8 @@ def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> di
                 english=english,
                 book=chunk.get("book", ""),
                 siman=chunk.get("siman"),
-                seif=chunk.get("seif")
+                seif=chunk.get("seif"),
+                context_text=chunk.get("context_text")
             )
 
     cache_time = (time.time() - cache_start) * 1000
@@ -188,79 +191,56 @@ def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> di
 def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> tuple[str, str]:
     """
     Build system and user prompts that instruct the LLM to use <cite> tags.
-    Now includes excerpt attribute for partial translations.
-    Returns (system_prompt, user_prompt).
+    LLM now only selects sources and excerpts - NO translation required.
     """
-    # Format available references for the prompt (include more to cover commentaries)
     refs_list = "\n".join(f"- {ref}" for ref in source_refs[:25])
 
     system_prompt = """You are a Torah scholar assistant specializing in Shulchan Arukh and its commentaries.
 
 CITATION FORMAT:
-When citing a source, use this XML tag format:
-<cite ref="EXACT_REFERENCE">ENGLISH_TRANSLATION</cite>
-OR for partial excerpts:
-<cite ref="EXACT_REFERENCE" excerpt='HEBREW_EXCERPT'>ENGLISH_TRANSLATION</cite>
+When citing a source, use this self-closing XML tag format:
 
-IMPORTANT - USE SINGLE QUOTES FOR EXCERPT:
-When including an excerpt, use SINGLE QUOTES (') around the Hebrew text, not double quotes (")
-This is critical because Hebrew text often contains quotation marks (gershayim) as punctuation.
+For the FULL source:
+<cite ref="EXACT_REFERENCE"/>
 
-TRANSLATION PHILOSOPHY - TRANSLATE WHAT'S RELEVANT:
-- GOAL: Translate the ENTIRE portion of the source that is RELEVANT to your point
-- Sometimes the entire source is relevant - translate it all (no excerpt)
-- Often only PART of the source is relevant - use excerpt to translate just that portion
-- Be FLEXIBLE: The key question is "what part of this source supports my point?"
-- When using excerpt, be LIBERAL and GENEROUS - include the full relevant portion
-- Excerpts should be substantial (typically 10-20+ words) to give proper context
-- NEVER use tiny excerpts (under 8 words) - either quote more generously or cite the whole source
+For a PARTIAL excerpt (when only part of the source is relevant):
+<cite ref="EXACT_REFERENCE" excerpt='HEBREW_EXCERPT'/>
 
-GUIDING PRINCIPLE - RELEVANCE OVER LENGTH:
-Don't base your decision on the total length of the source.
-Base it on how much of the source is actually relevant to your answer.
+IMPORTANT - EXCERPT FORMATTING:
+- Use SINGLE QUOTES (') around Hebrew text in excerpt attribute
+- The excerpt should be the EXACT Hebrew text you want to highlight
+- Include enough context in the excerpt (typically 10-30 words)
 
-EXAMPLES OF GOOD EXCERPT USAGE:
-1. A seif discusses 5 different laws, but you only need 1 law → Use excerpt for that specific law
-2. A Mishnah Berurah has a long explanation, but only the middle portion relates to your point → Excerpt that portion generously
-3. You need to highlight a specific ruling within a longer passage → Excerpt the ruling with surrounding context
-4. Half of a source is relevant, half is not → Excerpt the relevant half
-
-WHEN TO TRANSLATE THE FULL SOURCE (no excerpt):
-1. The ENTIRE source is relevant to your point - don't artificially limit it
-2. Most or all of the source supports what you're saying - include it all
-3. The source is inherently short (a brief statement) - no need to excerpt
-4. You're giving the full context of a ruling or explanation
+WHEN TO USE FULL vs EXCERPT:
+- FULL (<cite ref="..."/>): When the entire source is relevant to your point
+- EXCERPT (<cite ref="..." excerpt='...'/>) : When only PART of the source is relevant
 
 EXAMPLES:
 
-1. FULL translation when entire source is relevant (NO EXCERPT):
-   <cite ref="Shulchan Arukh, Orach Chayim 1:1">One should strengthen himself like a lion to arise in the morning for the service of his Creator</cite>
+1. Citing a full source:
+   The law states that one must rise early to serve Hashem <cite ref="Shulchan Arukh, Orach Chayim 1:1"/>
 
-2. EXCERPT when only part is relevant (note: generous 15+ word excerpt with SINGLE QUOTES):
-   <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר וצריכין להביא עמהם שתי לחמים ולהמתין בין חלב לבשר כדי שיעשה קינוח והדחה'>People eat dairy foods and then meat foods, and must bring two breads with them and wait between dairy and meat in order to perform rinsing and cleansing</cite>
+2. Citing a partial excerpt:
+   Regarding the custom of eating dairy <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
 
-3. FULL translation when the entire commentary is relevant (NO EXCERPT):
-   <cite ref="Mishnah Berurah 1:1">The reason is so that one should not be embarrassed before people who mock him for his piety</cite>
-
-4. EXCERPT when half the source is relevant (use a generous, complete portion):
-   <cite ref="Shulchan Arukh, Orach Chayim 156:1" excerpt='אם אכל דבר שאינו קובע אכילה די בנטילת ידיו או במשמוש מפה ואכילת פת או מאכלי חלב'>If one ate something that is not a fixed meal, hand washing or wiping with a cloth is sufficient, along with eating bread or dairy foods</cite>
+3. Citing a commentary in full:
+   The Mishnah Berurah explains this <cite ref="Mishnah Berurah 1:1"/>
 
 CRITICAL RULES:
 1. Use EXACT reference strings from the AVAILABLE REFERENCES list
 2. When using excerpt: Use SINGLE QUOTES (') not double quotes (")
-3. PREFER full translations - only use excerpt for genuinely long sources
-4. Excerpts must be substantial (8-10 words minimum) and meaningful
-5. Provide complete, accurate ENGLISH TRANSLATIONS of the Hebrew
-6. Each source should be cited at most once
-7. Be RELATIVELY CONCISE - cite no more than 5 sources unless clearly necessary
-8. Write in flowing paragraphs with line breaks between ideas
-9. Always cite sources when stating halachic rulings
-10. If the context doesn't contain enough information, say so clearly
+3. Excerpts must be substantial (8+ Hebrew words) for proper context
+4. Each source should be cited at most once
+5. Cite no more than 5 sources unless clearly necessary
+6. Write in flowing paragraphs with line breaks between ideas
+7. Always cite sources when stating halachic rulings
+8. If the context doesn't contain enough information, say so clearly
+9. DO NOT include translations - the citation system will handle that automatically
 
 STRUCTURE:
 - Start with a brief introduction
 - Weave citations naturally into your explanation
-- Use line breaks (double newlines) between paragraphs for readability
+- Use line breaks between paragraphs for readability
 - Conclude with practical guidance if applicable"""
 
     user_prompt = f"""Here are the relevant Torah sources for this question:
@@ -269,21 +249,14 @@ STRUCTURE:
 
 ---
 
-AVAILABLE REFERENCES (use these exact strings for citations):
+AVAILABLE REFERENCES (use these exact strings):
 {refs_list}
 
 ---
 
 USER'S QUESTION: {query}
 
-Please provide a helpful, accurate response with citations.
-
-REMINDER:
-- Translate the ENTIRE portion of each source that is RELEVANT to your point
-- Use excerpt when only PART of a source is relevant (often half or a few sentences)
-- Be LIBERAL and GENEROUS with excerpts - include full context (typically 10-20+ words)
-- When using excerpt, use SINGLE QUOTES: excerpt='...' not excerpt="..."
-- If the entire source is relevant, translate it all (no excerpt needed)"""
+Please provide a helpful, accurate response with citations. Remember: just use <cite ref="..."/> tags - translations will be added automatically."""
 
     return system_prompt, user_prompt
 
@@ -292,7 +265,8 @@ async def stream_with_citations(
     query: str,
     context: str,
     hydrated_chunks: list[dict],
-    xai_api_key: str
+    xai_api_key: str,
+    openrouter_api_key: str
 ) -> AsyncIterator[dict]:
     """
     Stream LLM response with paragraph-based buffering and citation parsing.
@@ -352,12 +326,12 @@ async def stream_with_citations(
 
                 if paragraph:
                     # Parse this paragraph for citations and emit
-                    async for event in parse_and_emit_paragraph(paragraph, source_cache):
+                    async for event in parse_and_emit_paragraph(paragraph, source_cache, openrouter_api_key):
                         yield event
 
         # Emit any remaining content in buffer
         if buffer.strip():
-            async for event in parse_and_emit_paragraph(buffer.strip(), source_cache):
+            async for event in parse_and_emit_paragraph(buffer.strip(), source_cache, openrouter_api_key):
                 yield event
 
         yield {"type": "done"}
@@ -417,21 +391,18 @@ def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Opt
 
 async def parse_and_emit_paragraph(
     text: str,
-    source_cache: dict[str, SourceText]
+    source_cache: dict[str, SourceText],
+    openrouter_api_key: str
 ) -> AsyncIterator[dict]:
     """
-    Parse a paragraph for <cite> tags and emit appropriate events.
-    Now supports excerpt attribute for Hebrew highlighting.
-
-    For text segments: yields {"type": "paragraph", "content": "..."}
-    For citations: yields {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
+    Parse a paragraph for <cite> tags, translate them, and emit events.
+    Citations are emitted AFTER translation completes.
     """
-    # Updated regex to capture optional excerpt attribute with proper quote handling
-    # Handles Hebrew gershayim (") and geresh (') within the excerpt text
-    # Uses negative lookahead to match quotes that aren't the closing delimiter
-    # Pattern: excerpt='...' or excerpt="..." where ... can contain any characters
+    from translator import translate_source, TranslationRequest
+
+    # Updated regex for self-closing tags
     cite_pattern = re.compile(
-        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'((?:(?!'\s*>).)*)'|"((?:(?!"\s*>).)*)")?)?\s*>(.*?)</cite>''',
+        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'((?:(?!'\s*/>).)*)'|"((?:(?!"\s*/>).)*)")?)?\s*/>''',
         re.DOTALL
     )
 
@@ -444,49 +415,49 @@ async def parse_and_emit_paragraph(
             yield {"type": "paragraph", "content": before_text}
 
         # Extract citation details
-        # Group 1: ref
-        # Group 2: excerpt with single quotes (or None)
-        # Group 3: excerpt with double quotes (or None)
-        # Group 4: context text
         ref = match.group(1)
-        hebrew_excerpt = match.group(2) or match.group(3)  # Take whichever is not None
-        context_text = match.group(4).strip()
+        hebrew_excerpt = match.group(2) or match.group(3)
 
         # Look up the source in cache
         source = source_cache.get(ref)
 
+        if not source:
+            source = find_best_source_match(ref, source_cache)
+
         if source:
+            # Create translation request
+            translation_request = TranslationRequest(
+                hebrew_text=source.hebrew,
+                hebrew_excerpt=hebrew_excerpt,
+                source_ref=ref,
+                book=source.book,
+                context_text=getattr(source, 'context_text', None)
+            )
+
+            # Get translation (non-streaming)
+            translation_result = await translate_source(
+                translation_request,
+                openrouter_api_key
+            )
+
+            # Emit citation with translation
             yield {
                 "type": "citation",
                 "ref": ref,
-                "context": context_text,
+                "context": translation_result.translation if translation_result.success else "",
                 "hebrew": source.hebrew,
-                "english": source.english,
+                "english": source.english,  # Sefaria's translation for reference
                 "book": source.book,
-                "hebrew_excerpt": hebrew_excerpt  # NEW: Pass excerpt to frontend
+                "hebrew_excerpt": hebrew_excerpt,
+                "translation_success": translation_result.success
             }
         else:
-            # Source not in cache - try smart matching for commentary subsections
-            matched_source = find_best_source_match(ref, source_cache)
-
-            if matched_source:
-                yield {
-                    "type": "citation",
-                    "ref": ref,
-                    "context": context_text,
-                    "hebrew": matched_source.hebrew,
-                    "english": matched_source.english,
-                    "book": matched_source.book,
-                    "hebrew_excerpt": hebrew_excerpt  # NEW: Pass excerpt to frontend
-                }
-            else:
-                # Fallback: emit as a paragraph with the citation inline
-                logger.warning(f"Citation ref not found in cache: {ref}")
-                yield {"type": "paragraph", "content": f"{context_text} ({ref})"}
+            logger.warning(f"Citation ref not found in cache: {ref}")
+            yield {"type": "paragraph", "content": f"[Citation: {ref}]"}
 
         last_end = match.end()
 
-    # Emit any remaining text after the last citation
+    # Emit any remaining text
     remaining = text[last_end:].strip()
     if remaining:
         yield {"type": "paragraph", "content": remaining}
@@ -498,7 +469,8 @@ async def generate_response_with_citations_stream(
     query: str,
     context: str,
     retrieved_chunks: list[dict],
-    xai_api_key: str
+    xai_api_key: str,
+    openrouter_api_key: str
 ) -> AsyncIterator[dict]:
     """
     Main entry point for citation-aware response generation.
@@ -508,6 +480,7 @@ async def generate_response_with_citations_stream(
         context: Formatted RAG context
         retrieved_chunks: Hydrated chunks from vector search
         xai_api_key: API key for xAI
+        openrouter_api_key: API key for OpenRouter (used for translations)
 
     Yields:
         Events for frontend rendering:
@@ -519,6 +492,7 @@ async def generate_response_with_citations_stream(
         query=query,
         context=context,
         hydrated_chunks=retrieved_chunks,
-        xai_api_key=xai_api_key
+        xai_api_key=xai_api_key,
+        openrouter_api_key=openrouter_api_key
     ):
         yield event
