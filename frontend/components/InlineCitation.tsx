@@ -33,6 +33,7 @@ export function InlineCitation({
 }: InlineCitationProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showFullHebrew, setShowFullHebrew] = useState(false);
+  const [showFullTranslation, setShowFullTranslation] = useState(false);
 
   // Extract a short title from the ref
   const shortTitle = ref_.split(",").slice(0, 2).join(",");
@@ -58,6 +59,10 @@ export function InlineCitation({
 
   // Determine if we have a valid highlight
   const hasHighlight = hebrewHighlightResult.found && !!hebrew_excerpt;
+
+  // Check if translation is truncated
+  const TRANSLATION_CHAR_LIMIT = 400;
+  const isTranslationTruncated = context && context.length > TRANSLATION_CHAR_LIMIT;
 
   return (
     <motion.div
@@ -149,7 +154,7 @@ export function InlineCitation({
                   marginRight: "8px",
                 }}
               >
-                {showFullHebrew ? "הצג פחות" : "הצג עוד"}
+                {showFullHebrew ? "show less" : "show more"}
               </button>
             )}
           </div>
@@ -162,8 +167,24 @@ export function InlineCitation({
                 color: "var(--color-text-muted)",
               }}
             >
-              {context.slice(0, 400)}
-              {context.length > 400 && "..."}
+              {showFullTranslation
+                ? context
+                : context.slice(0, TRANSLATION_CHAR_LIMIT)}
+              {!showFullTranslation && isTranslationTruncated && "..."}
+              {isTranslationTruncated && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowFullTranslation(!showFullTranslation);
+                  }}
+                  className="inline-block ml-2 text-sm font-sans not-italic"
+                  style={{
+                    color: "var(--color-accent-secondary)",
+                  }}
+                >
+                  {showFullTranslation ? "show less" : "show more"}
+                </button>
+              )}
             </div>
           )}
 
@@ -176,7 +197,7 @@ export function InlineCitation({
             className="text-xs font-sans font-medium flex items-center gap-1 transition-colors hover:opacity-80"
             style={{ color: "var(--color-accent-primary)" }}
           >
-            View full source
+            View in Sefer
             <span>&rarr;</span>
           </button>
         </div>
