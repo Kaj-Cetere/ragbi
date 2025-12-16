@@ -200,42 +200,39 @@ def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> t
 CITATION FORMAT:
 When citing a source, use this self-closing XML tag format:
 
-For the FULL source:
-<cite ref="EXACT_REFERENCE"/>
+<cite ref="EXACT_REFERENCE" highlight='RELEVANT_HEBREW_TEXT'/>
 
-For a PARTIAL excerpt (when only part of the source is relevant):
-<cite ref="EXACT_REFERENCE" excerpt='HEBREW_EXCERPT'/>
+The highlight attribute pinpoints the SPECIFIC Hebrew text that supports your point.
+This is the PREFERRED citation style - it shows scholarly precision.
 
-IMPORTANT - EXCERPT FORMATTING:
-- Use SINGLE QUOTES (') around Hebrew text in excerpt attribute
-- The excerpt should be the EXACT Hebrew text you want to highlight
-- Include enough context in the excerpt (typically 10-30 words)
+OMIT highlight ONLY when the ENTIRE source text is directly relevant (less common).
 
-WHEN TO USE FULL vs EXCERPT:
-- FULL (<cite ref="..."/>): When the entire source is relevant to your point
-- EXCERPT (<cite ref="..." excerpt='...'/>) : When only PART of the source is relevant
+HIGHLIGHT GUIDELINES:
+- Use SINGLE QUOTES (') around Hebrew text
+- Include 8-30 Hebrew words - enough for context
+- Copy the EXACT Hebrew from the source
+- Think: "What specific phrase answers the user's question?"
 
 EXAMPLES:
 
-1. Citing a full source:
-   The law states that one must rise early to serve Hashem <cite ref="Shulchan Arukh, Orach Chayim 1:1"/>
+1. Highlighting the relevant portion (PREFERRED):
+   Regarding the custom of eating dairy <cite ref="Mishnah Berurah 494:14" highlight='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
 
-2. Citing a partial excerpt:
-   Regarding the custom of eating dairy <cite ref="Mishnah Berurah 494:14" excerpt='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
+2. Another highlighted citation:
+   One must rise early <cite ref="Shulchan Arukh, Orach Chayim 1:1" highlight='יתגבר כארי לעמוד בבוקר לעבודת בוראו'/>
 
-3. Citing a commentary in full:
-   The Mishnah Berurah explains this <cite ref="Mishnah Berurah 1:1"/>
+3. Full source citation (use sparingly - only when ALL text is relevant):
+   <cite ref="Shulchan Arukh, Orach Chayim 1:1"/>
 
 CRITICAL RULES:
 1. Use EXACT reference strings from the AVAILABLE REFERENCES list
-2. When using excerpt: Use SINGLE QUOTES (') not double quotes (")
-3. Excerpts must be substantial (8+ Hebrew words) for proper context
+2. DEFAULT to using highlight - ask yourself "which specific words support this?"
+3. Use SINGLE QUOTES (') not double quotes (") for highlight
 4. Each source should be cited at most once
 5. Cite no more than 5 sources unless clearly necessary
 6. Write in flowing paragraphs with line breaks between ideas
 7. Always cite sources when stating halachic rulings
 8. If the context doesn't contain enough information, say so clearly
-9. DO NOT include translations - the citation system will handle that automatically
 
 STRUCTURE:
 - Start with a brief introduction
@@ -402,7 +399,7 @@ async def parse_and_emit_paragraph(
 
     # Updated regex for self-closing tags
     cite_pattern = re.compile(
-        r'''<cite\s+ref="([^"]+)"(?:\s+excerpt=(?:'((?:(?!'\s*/>).)*)'|"((?:(?!"\s*/>).)*)")?)?\s*/>''',
+        r'''<cite\s+ref="([^"]+)"(?:\s+highlight=(?:'((?:(?!'\s*/>).)*)'|"((?:(?!"\s*/>).)*)")?)?\s*/>''',
         re.DOTALL
     )
 
@@ -416,7 +413,7 @@ async def parse_and_emit_paragraph(
 
         # Extract citation details
         ref = match.group(1)
-        hebrew_excerpt = match.group(2) or match.group(3)
+        hebrew_highlight = match.group(2) or match.group(3)
 
         # Look up the source in cache
         source = source_cache.get(ref)
@@ -428,7 +425,7 @@ async def parse_and_emit_paragraph(
             # Create translation request
             translation_request = TranslationRequest(
                 hebrew_text=source.hebrew,
-                hebrew_excerpt=hebrew_excerpt,
+                hebrew_highlight=hebrew_highlight,
                 source_ref=ref,
                 book=source.book,
                 context_text=getattr(source, 'context_text', None)
@@ -448,7 +445,7 @@ async def parse_and_emit_paragraph(
                 "hebrew": source.hebrew,
                 "english": source.english,  # Sefaria's translation for reference
                 "book": source.book,
-                "hebrew_excerpt": hebrew_excerpt,
+                "hebrew_highlight": hebrew_highlight,
                 "translation_success": translation_result.success
             }
         else:

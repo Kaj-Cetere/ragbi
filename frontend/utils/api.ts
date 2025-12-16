@@ -2,8 +2,9 @@
  * API utilities for connecting to the FastAPI backend
  */
 
-// Add this at the top of the file
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// API URL - defaults to localhost:8001 for local development
+// Set NEXT_PUBLIC_API_URL in .env.local to override (e.g., for deployed backend)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 export interface Source {
   rank: number;
@@ -44,7 +45,7 @@ export interface CitationEvent {
   hebrew: string;
   english: string;       // Sefaria's translation (reference)
   book?: string;
-  hebrew_excerpt?: string;  // The specific Hebrew portion being translated
+  hebrew_highlight?: string;  // The specific Hebrew portion being translated
   translation_success?: boolean;  // Whether the dedicated translation succeeded
 }
 
@@ -116,7 +117,7 @@ export interface StreamEvent {
   hebrew?: string;
   english?: string;
   book?: string;
-  hebrew_excerpt?: string;  // The specific Hebrew portion being translated
+  hebrew_highlight?: string;  // The specific Hebrew portion being translated
   translation_success?: boolean;  // Whether the dedicated translation succeeded
   // Metrics-specific fields
   stage?: string;

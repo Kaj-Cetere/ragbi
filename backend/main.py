@@ -12,7 +12,7 @@ import time
 from typing import Optional, AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -90,6 +90,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://127.0.0.1:3000",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
@@ -307,6 +308,19 @@ Please provide a helpful, accurate response based on the sources above."""
 
 # --- API ENDPOINTS ---
 
+@app.options("/api/chat/stream")
+async def chat_stream_options():
+    """Handle CORS preflight for chat stream endpoint."""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        }
+    )
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -480,7 +494,7 @@ async def chat_stream(request: QueryRequest):
                                 'hebrew': event['hebrew'],
                                 'english': event['english'],
                                 'book': event.get('book', ''),
-                                'hebrew_excerpt': event.get('hebrew_excerpt'),
+                                'hebrew_highlight': event.get('hebrew_highlight'),
                                 'translation_success': event.get('translation_success', True)
                             })}\n\n"
                         # Skip 'done' events - we handle that separately

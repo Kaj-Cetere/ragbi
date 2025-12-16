@@ -22,7 +22,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 class TranslationRequest:
     """Request for translating a Torah source."""
     hebrew_text: str
-    hebrew_excerpt: Optional[str] = None  # If provided, only translate this portion
+    hebrew_highlight: Optional[str] = None  # If provided, only translate this portion
     source_ref: str = ""
     book: str = ""
     context_text: Optional[str] = None  # AI-generated context for SA texts
@@ -32,8 +32,8 @@ class TranslationRequest:
         return "Shulchan Arukh" in self.source_ref or "Shulchan Arukh" in self.book
 
     @property
-    def is_excerpt(self) -> bool:
-        return self.hebrew_excerpt is not None and len(self.hebrew_excerpt.strip()) > 0
+    def is_highlight(self) -> bool:
+        return self.hebrew_highlight is not None and len(self.hebrew_highlight.strip()) > 0
 
 
 @dataclass
@@ -77,14 +77,14 @@ SHULCHAN ARUKH SPECIFIC RULES:
 4. Use consistent terminology for halachic concepts throughout"""
 
     # Build user prompt
-    if request.is_excerpt:
+    if request.is_highlight:
         user_prompt = f"""Translate ONLY the highlighted portion of this Hebrew text.
 
 FULL SOURCE TEXT (for context):
 {request.hebrew_text}
 
 HIGHLIGHTED PORTION TO TRANSLATE:
-{request.hebrew_excerpt}
+{request.hebrew_highlight}
 
 INSTRUCTIONS:
 - Translate ONLY the highlighted portion above

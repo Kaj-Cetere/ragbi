@@ -31,7 +31,7 @@ interface ResponseSegment {
   hebrew?: string;
   english?: string;
   book?: string;
-  hebrew_excerpt?: string;  // NEW: The specific Hebrew portion being translated
+  hebrew_highlight?: string;  // NEW: The specific Hebrew portion being translated
 }
 
 // Suggestion pills for quick searches
@@ -199,7 +199,7 @@ export default function Home() {
                 hebrew: event.hebrew,
                 english: event.english,
                 book: event.book,
-                hebrew_excerpt: event.hebrew_excerpt,  // NEW: Pass excerpt for highlighting
+                hebrew_highlight: event.hebrew_highlight,  // NEW: Pass highlight for highlighting
               };
               setResponseSegments((prev) => [...prev, newSegment]);
             }
@@ -488,7 +488,7 @@ export default function Home() {
                   hebrew={segment.hebrew || ""}
                   english={segment.english || ""}
                   book={segment.book}
-                  hebrew_excerpt={segment.hebrew_excerpt}  // NEW: Pass excerpt for highlighting
+                  hebrew_highlight={segment.hebrew_highlight}  // NEW: Pass highlight for highlighting
                   index={index}
                   onClick={() => segment.ref && openSidebar(segment.ref)}
                 />

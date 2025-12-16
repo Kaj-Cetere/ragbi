@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useMemo } from "react";
 import {
-  findHebrewExcerpt,
+  findHebrewHighlight,
   smartTruncate,
   renderSegments,
   wouldBeTruncated,
@@ -16,7 +16,7 @@ interface InlineCitationProps {
   hebrew: string;
   english: string;        // Sefaria translation (optional reference)
   book?: string;
-  hebrew_excerpt?: string; // The specific Hebrew portion being translated
+  hebrew_highlight?: string; // The specific Hebrew portion being translated
   index: number;
   onClick?: () => void;
   translation_success?: boolean;  // Track if translation worked
@@ -28,7 +28,7 @@ export function InlineCitation({
   hebrew,
   english,
   book,
-  hebrew_excerpt,
+  hebrew_highlight,
   index,
   onClick,
   translation_success = true,
@@ -47,8 +47,8 @@ export function InlineCitation({
 
   // Process Hebrew text with highlighting
   const hebrewHighlightResult = useMemo(() => {
-    return findHebrewExcerpt(hebrew, hebrew_excerpt);
-  }, [hebrew, hebrew_excerpt]);
+    return findHebrewHighlight(hebrew, hebrew_highlight);
+  }, [hebrew, hebrew_highlight]);
 
   // Check if Hebrew would be truncated
   const isHebrewTruncated = useMemo(() => {
@@ -65,7 +65,7 @@ export function InlineCitation({
   }, [hebrewHighlightResult, showFullHebrew]);
 
   // Determine if we have a valid highlight
-  const hasHighlight = hebrewHighlightResult.found && !!hebrew_excerpt;
+  const hasHighlight = hebrewHighlightResult.found && !!hebrew_highlight;
 
   // Check if translation is truncated
   const TRANSLATION_CHAR_LIMIT = 400;

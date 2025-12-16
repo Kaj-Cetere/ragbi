@@ -1,7 +1,7 @@
 /**
  * Hebrew Text Highlighting Utilities
  *
- * Provides functions for finding and highlighting Hebrew excerpts
+ * Provides functions for finding and highlighting Hebrew highlights
  * within larger Hebrew text blocks, with smart truncation that
  * ensures the highlighted portion is always visible.
  */
@@ -61,15 +61,15 @@ export function stripHtmlTags(text: string): string {
 }
 
 /**
- * Find Hebrew excerpt within full text and return segmented result
+ * Find Hebrew highlight within full text and return segmented result
  *
  * @param fullText - The complete Hebrew text (may contain HTML)
- * @param excerpt - The Hebrew excerpt to find
+ * @param highlight - The Hebrew highlight to find
  * @returns HighlightResult with segments for rendering
  */
-export function findHebrewExcerpt(
+export function findHebrewHighlight(
   fullText: string,
-  excerpt: string | undefined | null
+  highlight: string | undefined | null
 ): HighlightResult {
   // Handle edge cases
   if (!fullText) {
@@ -79,7 +79,7 @@ export function findHebrewExcerpt(
     };
   }
 
-  if (!excerpt) {
+  if (!highlight) {
     return {
       segments: [{ text: stripHtmlTags(fullText), highlighted: false }],
       found: false,
@@ -89,25 +89,25 @@ export function findHebrewExcerpt(
   // Normalize both texts for matching
   const cleanFull = stripHtmlTags(fullText);
   const normalizedFull = normalizeHebrew(fullText);
-  const normalizedExcerpt = normalizeHebrew(excerpt);
+  const normalizedHighlight = normalizeHebrew(highlight);
 
   // Try exact substring match first
-  let matchIndex = normalizedFull.indexOf(normalizedExcerpt);
+  let matchIndex = normalizedFull.indexOf(normalizedHighlight);
 
   if (matchIndex === -1) {
     // Try without punctuation (keep only Hebrew letters and spaces)
     const hebrewOnlyFull = normalizedFull.replace(/[^\u0590-\u05FF\s]/g, "");
-    const hebrewOnlyExcerpt = normalizedExcerpt.replace(
+    const hebrewOnlyHighlight = normalizedHighlight.replace(
       /[^\u0590-\u05FF\s]/g,
       ""
     );
 
-    const fuzzyIndex = hebrewOnlyFull.indexOf(hebrewOnlyExcerpt);
+    const fuzzyIndex = hebrewOnlyFull.indexOf(hebrewOnlyHighlight);
 
     if (fuzzyIndex === -1) {
       // No match found
       console.warn(
-        `Hebrew excerpt not found. Excerpt: "${excerpt.slice(0, 30)}..."`
+        `Hebrew highlight not found. Highlight: "${highlight.slice(0, 30)}..."`
       );
       return {
         segments: [{ text: cleanFull, highlighted: false }],
@@ -121,7 +121,7 @@ export function findHebrewExcerpt(
       normalizedFull,
       hebrewOnlyFull,
       fuzzyIndex,
-      hebrewOnlyExcerpt.length
+      hebrewOnlyHighlight.length
     );
   }
 
@@ -131,7 +131,7 @@ export function findHebrewExcerpt(
     cleanFull,
     normalizedFull,
     matchIndex,
-    matchIndex + normalizedExcerpt.length
+    matchIndex + normalizedHighlight.length
   );
 
   return createSegments(cleanFull, mappedIndices.start, mappedIndices.end);
