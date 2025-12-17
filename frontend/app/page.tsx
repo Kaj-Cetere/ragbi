@@ -506,8 +506,8 @@ export default function Home() {
               </motion.div>
             )}
 
-            {/* Citation Cards for top sources - only show when NO inline citations exist (legacy fallback) */}
-            {!isLoading && responseSegments.filter(s => s.type === "citation").length === 0 && sources.slice(0, 3).map((source, i) => (
+            {/* Citation Cards for top sources - only show when stream is complete and NO inline citations exist (legacy fallback) */}
+            {isComplete && responseSegments.filter(s => s.type === "citation").length === 0 && sources.slice(0, 3).map((source, i) => (
               <CitationCard
                 key={source.ref}
                 source={source}
@@ -516,8 +516,8 @@ export default function Home() {
               />
             ))}
 
-            {/* Additional Sources List */}
-            {!isLoading && sources.length > 3 && (
+            {/* Additional Sources List - only show when stream is complete */}
+            {isComplete && sources.length > 3 && (
               <SourcesList
                 sources={sources.slice(3)}
                 onSourceClick={openSidebar}
