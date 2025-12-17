@@ -216,23 +216,24 @@ HIGHLIGHT GUIDELINES:
 EXAMPLES:
 
 1. Highlighting the relevant portion (PREFERRED):
-   Regarding the custom of eating dairy <cite ref="Mishnah Berurah 494:14" highlight='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
+   Regarding the custom of eating dairy <cite ref="Mishnah Berurah 187:4" highlight='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
 
-2. Another highlighted citation:
-   One must rise early <cite ref="Shulchan Arukh, Orach Chayim 1:1" highlight='יתגבר כארי לעמוד בבוקר לעבודת בוראו'/>
+2. Another highlighted citation (commentary on Shulchan Arukh):
+   The Ba'er Hetev explains <cite ref="Ba'er Hetev on Shulchan Arukh, Orach Chayim 1:5" highlight='צריך להזהר מאוד בזה'/>
 
 3. Full source citation (use sparingly - only when ALL text is relevant):
    <cite ref="Shulchan Arukh, Orach Chayim 1:1"/>
 
 CRITICAL RULES:
 1. Use EXACT reference strings from the AVAILABLE REFERENCES list
-2. DEFAULT to using highlight - ask yourself "which specific words support this?"
-3. Use SINGLE QUOTES (') not double quotes (") for highlight
-4. Each source should be cited at most once
-5. Cite no more than 5 sources unless clearly necessary
-6. Write in flowing paragraphs with line breaks between ideas
-7. Always cite sources when stating halachic rulings
-8. If the context doesn't contain enough information, say so clearly
+2. Copy reference strings EXACTLY as listed - do not modify or construct them
+3. DEFAULT to using highlight - ask yourself "which specific words support this?"
+4. Use SINGLE QUOTES (') not double quotes (") for highlight
+5. Each source should be cited at most once
+6. Cite no more than 5 sources unless clearly necessary
+7. Write in flowing paragraphs with line breaks between ideas
+8. Always cite sources when stating halachic rulings
+9. If the context doesn't contain enough information, say so clearly
 
 STRUCTURE:
 - Start with a brief introduction
