@@ -54,8 +54,8 @@ CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 
 # RAG Settings
 TOP_K_RETRIEVE_FOR_RERANK = 50
-TOP_K_AFTER_RERANK = 10
-TOP_K_HYDRATE = 3
+TOP_K_AFTER_RERANK = 13
+TOP_K_HYDRATE = 4
 
 # --- GLOBAL CLIENTS ---
 openrouter_client: OpenRouter = None
