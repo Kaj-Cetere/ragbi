@@ -124,15 +124,6 @@ def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> di
                     book=commentator
                 )
 
-            fallback_ref = f"{ref}:{commentator}"
-            if fallback_ref not in cache:
-                cache[fallback_ref] = SourceText(
-                    ref=comm_ref or fallback_ref,
-                    hebrew=comm_text,
-                    english="",
-                    book=commentator
-                )
-
     # Parallel fetch from Sefaria for main refs only
     if parallel and refs_to_fetch:
         def fetch_one(ref_chunk_tuple):
@@ -215,7 +206,7 @@ HIGHLIGHT GUIDELINES:
 
 EXAMPLES:
 
-1. Highlighting the relevant portion (PREFERRED):
+1. Highlighting the relevant portion:
    Regarding the custom of eating dairy <cite ref="Mishnah Berurah 187:4" highlight='אוכלים מאכלי חלב ואח״כ מאכול בשר'/>
 
 2. Another highlighted citation (commentary on Shulchan Arukh):
