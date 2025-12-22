@@ -56,6 +56,7 @@ CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 TOP_K_RETRIEVE_FOR_RERANK = 50
 TOP_K_AFTER_RERANK = 13
 TOP_K_HYDRATE = 4
+SOURCES_ONLY_RELEVANCE_THRESHOLD = 0.25  # Minimum rerank score for sources-only mode
 
 # --- GLOBAL CLIENTS ---
 openrouter_client: OpenRouter = None
@@ -106,6 +107,7 @@ class QueryRequest(BaseModel):
     """Request model for chat queries."""
     query: str = Field(..., min_length=1, max_length=2000, description="User's question")
     use_agent: bool = Field(default=True, description="Use quotation agent for structured responses")
+    sources_only: bool = Field(default=False, description="Return only reranked sources without LLM generation")
 
 
 class SourceChunk(BaseModel):
@@ -335,8 +337,9 @@ async def chat_stream(request: QueryRequest):
     """
     query = request.query
     use_agent = request.use_agent
-    
-    logger.info(f"🚀 New query: '{query[:50]}...' (agent={use_agent})")
+    sources_only = request.sources_only
+
+    logger.info(f"🚀 New query: '{query[:50]}...' (agent={use_agent}, sources_only={sources_only})")
     
     async def event_generator():
         # Performance metrics tracking
@@ -408,6 +411,57 @@ async def chat_stream(request: QueryRequest):
 
             # Emit rerank metrics
             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'reranking', 'duration_ms': metrics['durations']['reranking'], 'details': {'was_reranked': was_reranked, 'chunks_after': metrics['counts']['chunks_after_rerank'], 'top_rerank_score': metrics['metadata'].get('rerank_score_max')}})}\n\n"
+
+            # SOURCES-ONLY MODE: Skip hydration and LLM, return reranked sources directly
+            if sources_only:
+                # Filter sources by relevance threshold
+                if was_reranked:
+                    filtered_chunks = [
+                        c for c in chunks
+                        if c.get("rerank_score", 0) >= SOURCES_ONLY_RELEVANCE_THRESHOLD
+                    ]
+                else:
+                    # If reranking failed, use similarity as fallback
+                    filtered_chunks = [
+                        c for c in chunks
+                        if c.get("similarity", 0) >= SOURCES_ONLY_RELEVANCE_THRESHOLD
+                    ]
+
+                # Build sources data for all filtered chunks (no hydration needed for speed)
+                sources_data = []
+                for i, chunk in enumerate(filtered_chunks):
+                    metadata = chunk.get("metadata", {})
+                    sources_data.append({
+                        "rank": i + 1,
+                        "ref": chunk.get("sefaria_ref", ""),
+                        "content": chunk.get("content", ""),
+                        "context_text": chunk.get("context_text", ""),
+                        "similarity": chunk.get("similarity", 0),
+                        "rerank_score": chunk.get("rerank_score"),
+                        "book": metadata.get("book", ""),
+                        "siman": metadata.get("siman"),
+                        "seif": metadata.get("seif"),
+                        "commentaries": [],
+                        "hydrated": False
+                    })
+
+                metrics["counts"]["sources_returned"] = len(sources_data)
+                metrics["counts"]["sources_filtered_out"] = len(chunks) - len(filtered_chunks)
+
+                # Calculate total pipeline time
+                pipeline_end = time.time()
+                metrics["durations"]["total_pipeline"] = round((pipeline_end - pipeline_start) * 1000, 2)
+
+                # Emit sources_only event with all sources
+                yield f"data: {json.dumps({'type': 'sources_only', 'data': sources_data})}\n\n"
+
+                # Emit final metrics
+                yield f"data: {json.dumps({'type': 'metrics_summary', 'total_duration_ms': metrics['durations']['total_pipeline'], 'breakdown': metrics['durations'], 'counts': metrics['counts'], 'metadata': metrics['metadata']})}\n\n"
+
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+                logger.info(f"✅ Sources-only query completed in {metrics['durations']['total_pipeline']:.0f}ms - {len(sources_data)} sources returned (filtered {metrics['counts']['sources_filtered_out']} below threshold)")
+                return
 
             # Step 4: Hydrate with commentaries
             yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching commentaries...'})}\n\n"
@@ -487,7 +541,7 @@ async def chat_stream(request: QueryRequest):
                             yield f"data: {json.dumps({'type': 'paragraph', 'content': event['content']})}\n\n"
                         elif event["type"] == "citation":
                             citation_count += 1
-                            yield f"data: {json.dumps({
+                            citation_data = {
                                 'type': 'citation',
                                 'ref': event['ref'],
                                 'context': event['context'],
@@ -496,7 +550,8 @@ async def chat_stream(request: QueryRequest):
                                 'book': event.get('book', ''),
                                 'hebrew_highlight': event.get('hebrew_highlight'),
                                 'translation_success': event.get('translation_success', True)
-                            })}\n\n"
+                            }
+                            yield f"data: {json.dumps(citation_data)}\n\n"
                         # Skip 'done' events - we handle that separately
                 except Exception as e:
                     logger.error(f"❌ Citation agent failed, falling back: {e}")
