@@ -550,31 +550,16 @@ export default function Home() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3 }}
+                className="space-y-1"
               >
-                {/* Results header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Zap size={16} style={{ color: 'var(--color-accent-secondary)' }} />
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: 'var(--color-text-muted)' }}
-                    >
-                      {sourcesOnlyResults.length} relevant sources found
-                    </span>
-                  </div>
-                </div>
-
-                {/* Source cards */}
-                <div className="space-y-1">
-                  {sourcesOnlyResults.map((source, i) => (
-                    <SourceCard
-                      key={source.ref}
-                      source={source}
-                      index={i}
-                      onClick={() => openSidebar(source.ref)}
-                    />
-                  ))}
-                </div>
+                {sourcesOnlyResults.map((source, i) => (
+                  <SourceCard
+                    key={source.ref}
+                    source={source}
+                    index={i}
+                    onClick={() => openSidebar(source.ref)}
+                  />
+                ))}
               </motion.div>
             )}
 
