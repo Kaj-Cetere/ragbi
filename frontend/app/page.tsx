@@ -2,11 +2,12 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, Search, Send } from "lucide-react";
+import { Sparkles, ArrowRight, Search, Send, Brain, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 import { Loader } from "@/components/Loader";
 import { CitationCard } from "@/components/CitationCard";
+import { SourceCard } from "@/components/SourceCard";
 import { InlineCitation } from "@/components/InlineCitation";
 import { SourcesList } from "@/components/SourcesList";
 import { Sidebar } from "@/components/Sidebar";
@@ -55,6 +56,9 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [currentQuery, setCurrentQuery] = useState("");
 
+  // Response mode toggle: false = AI Response (smart), true = Sources Only (fast)
+  const [sourcesOnlyMode, setSourcesOnlyMode] = useState(false);
+
   // Input state
   const [inputValue, setInputValue] = useState("");
   const [followUpValue, setFollowUpValue] = useState("");
@@ -65,6 +69,7 @@ export default function Home() {
   const [responseSegments, setResponseSegments] = useState<ResponseSegment[]>([]);
   const [fallbackText, setFallbackText] = useState(""); // For legacy chunk-based streaming
   const [sources, setSources] = useState<Source[]>([]);
+  const [sourcesOnlyResults, setSourcesOnlyResults] = useState<Source[]>([]); // For sources-only mode
   const [isComplete, setIsComplete] = useState(false);
 
   // Sidebar state
@@ -122,12 +127,13 @@ export default function Home() {
     setResponseSegments([]);
     setFallbackText("");
     setSources([]);
-    setLoadingStatus("Connecting to Library...");
+    setSourcesOnlyResults([]);
+    setLoadingStatus(sourcesOnlyMode ? "Finding Sources..." : "Connecting to Library...");
 
     let segmentCounter = 0;
 
     try {
-      for await (const event of streamChat(query, true)) {
+      for await (const event of streamChat(query, !sourcesOnlyMode, sourcesOnlyMode)) {
         eventCount++;
         const now = Date.now();
 
@@ -152,6 +158,27 @@ export default function Home() {
           case "sources":
             if (event.data) {
               setSources(event.data);
+              if (!sourcesTime) {
+                sourcesTime = now;
+                setFrontendMetrics((prev) => ({
+                  ...prev,
+                  timeToSources: sourcesTime! - queryStartTime,
+                }));
+              }
+            }
+            break;
+
+          case "sources_only":
+            setIsLoading(false);
+            if (event.data) {
+              setSourcesOnlyResults(event.data);
+              if (!firstContentTime) {
+                firstContentTime = now;
+                setFrontendMetrics((prev) => ({
+                  ...prev,
+                  timeToFirstContent: firstContentTime! - queryStartTime,
+                }));
+              }
               if (!sourcesTime) {
                 sourcesTime = now;
                 setFrontendMetrics((prev) => ({
@@ -284,7 +311,7 @@ export default function Home() {
         eventCount,
       }));
     }
-  }, []);
+  }, [sourcesOnlyMode]);
 
   // Handle quick search from pills
   const handleQuickSearch = (text: string) => {
@@ -424,8 +451,43 @@ export default function Home() {
                 </button>
               </div>
 
+              {/* Response Mode Toggle */}
+              <div className="flex justify-center mt-5">
+                <div
+                  className="inline-flex rounded-full p-1"
+                  style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
+                >
+                  <button
+                    onClick={() => setSourcesOnlyMode(false)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      !sourcesOnlyMode ? 'shadow-sm' : ''
+                    }`}
+                    style={{
+                      backgroundColor: !sourcesOnlyMode ? 'var(--color-accent-primary)' : 'transparent',
+                      color: !sourcesOnlyMode ? 'white' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    <Brain size={16} />
+                    <span>AI Response</span>
+                  </button>
+                  <button
+                    onClick={() => setSourcesOnlyMode(true)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      sourcesOnlyMode ? 'shadow-sm' : ''
+                    }`}
+                    style={{
+                      backgroundColor: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'transparent',
+                      color: sourcesOnlyMode ? 'white' : 'var(--color-text-muted)',
+                    }}
+                  >
+                    <Zap size={16} />
+                    <span>Sources Only</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Suggestions */}
-              <div className="flex gap-3 justify-center mt-8 flex-wrap">
+              <div className="flex gap-3 justify-center mt-6 flex-wrap">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s.text}
@@ -456,20 +518,68 @@ export default function Home() {
           className="flex-1 overflow-y-auto px-6 py-10 pb-48"
         >
           <div className="max-w-[700px] mx-auto">
-            {/* Top Bar (Question) */}
+            {/* Top Bar (Question + Mode Indicator) */}
             <div className="px-6 py-5 mb-6 -mx-6 border-b glass-bg" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center gap-3">
-                <Search size={18} style={{ color: 'var(--color-text-light)' }} />
-                <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
-                  {currentQuery}
-                </span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Search size={18} style={{ color: 'var(--color-text-light)' }} />
+                  <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
+                    {currentQuery}
+                  </span>
+                </div>
+                {/* Mode badge */}
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'var(--color-accent-primary)',
+                    color: 'white',
+                    opacity: 0.9
+                  }}
+                >
+                  {sourcesOnlyMode ? <Zap size={12} /> : <Brain size={12} />}
+                  <span>{sourcesOnlyMode ? 'Sources Only' : 'AI Response'}</span>
+                </div>
               </div>
             </div>
             {/* Loader */}
             {isLoading && <Loader text={loadingStatus} />}
 
-            {/* Response Segments (paragraphs and inline citations) */}
-            {responseSegments.map((segment, index) => (
+            {/* Sources Only Mode - Display all reranked sources */}
+            {sourcesOnlyMode && sourcesOnlyResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Results header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Zap size={16} style={{ color: 'var(--color-accent-secondary)' }} />
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      {sourcesOnlyResults.length} relevant sources found
+                    </span>
+                  </div>
+                </div>
+
+                {/* Source cards */}
+                <div className="space-y-1">
+                  {sourcesOnlyResults.map((source, i) => (
+                    <SourceCard
+                      key={source.ref}
+                      source={source}
+                      index={i}
+                      onClick={() => openSidebar(source.ref)}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* AI Response Mode - Response Segments (paragraphs and inline citations) */}
+            {!sourcesOnlyMode && responseSegments.map((segment, index) => (
               segment.type === "paragraph" ? (
                 <motion.div
                   key={segment.id}
@@ -496,7 +606,7 @@ export default function Home() {
             ))}
 
             {/* Fallback for legacy chunk-based streaming */}
-            {fallbackText && (
+            {!sourcesOnlyMode && fallbackText && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -507,7 +617,7 @@ export default function Home() {
             )}
 
             {/* Citation Cards for top sources - only show when stream is complete and NO inline citations exist (legacy fallback) */}
-            {isComplete && responseSegments.filter(s => s.type === "citation").length === 0 && sources.slice(0, 3).map((source, i) => (
+            {!sourcesOnlyMode && isComplete && responseSegments.filter(s => s.type === "citation").length === 0 && sources.slice(0, 3).map((source, i) => (
               <CitationCard
                 key={source.ref}
                 source={source}
@@ -517,7 +627,7 @@ export default function Home() {
             ))}
 
             {/* Additional Sources List - only show when stream is complete */}
-            {isComplete && sources.length > 3 && (
+            {!sourcesOnlyMode && isComplete && sources.length > 3 && (
               <SourcesList
                 sources={sources.slice(3)}
                 onSourceClick={openSidebar}

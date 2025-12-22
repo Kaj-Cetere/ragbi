@@ -10,6 +10,7 @@ export interface Source {
   rank: number;
   ref: string;
   content: string;
+  context_text?: string;  // Contextual notes from embedding
   similarity: number;
   rerank_score?: number;
   book: string;
@@ -37,7 +38,7 @@ export interface SefariaText {
   targetVerse?: number;
 }
 
-export type StreamEventType = 'status' | 'sources' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error' | 'metrics' | 'metrics_summary';
+export type StreamEventType = 'status' | 'sources' | 'sources_only' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error' | 'metrics' | 'metrics_summary';
 
 export interface CitationEvent {
   ref: string;
@@ -146,7 +147,8 @@ export interface FrontendMetrics {
  */
 export async function* streamChat(
   query: string,
-  useAgent: boolean = true
+  useAgent: boolean = true,
+  sourcesOnly: boolean = false
 ): AsyncGenerator<StreamEvent> {
   const response = await fetch(`${API_URL}/api/chat/stream`, {
     method: 'POST',
@@ -156,6 +158,7 @@ export async function* streamChat(
     body: JSON.stringify({
       query,
       use_agent: useAgent,
+      sources_only: sourcesOnly,
     }),
   });
 
