@@ -38,7 +38,24 @@ export interface SefariaText {
   targetVerse?: number;
 }
 
-export type StreamEventType = 'status' | 'sources' | 'sources_only' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error' | 'metrics' | 'metrics_summary';
+export type StreamEventType = 'status' | 'sources' | 'sources_only' | 'chunk' | 'paragraph' | 'citation' | 'done' | 'error' | 'metrics' | 'metrics_summary' | 'ranking_comparison';
+
+// Ranking comparison types for testing reranker effectiveness
+export interface RankedChunk {
+  rank: number;
+  ref: string;
+  content: string;
+  similarity: number;
+  rerank_score?: number;
+  original_rank?: number;
+  book: string;
+}
+
+export interface RankingComparison {
+  pre_rerank: RankedChunk[];
+  post_rerank: RankedChunk[];
+  was_reranked: boolean;
+}
 
 export interface CitationEvent {
   ref: string;
@@ -129,6 +146,10 @@ export interface StreamEvent {
   breakdown?: MetricsBreakdown;
   counts?: MetricsCounts;
   metadata?: MetricsMetadata;
+  // Ranking comparison fields (for testing reranker effectiveness)
+  pre_rerank?: RankedChunk[];
+  post_rerank?: RankedChunk[];
+  was_reranked?: boolean;
 }
 
 // Frontend performance tracking
