@@ -383,6 +383,18 @@ async def chat_stream(request: QueryRequest):
             # Emit search metrics
             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'vector_search', 'duration_ms': metrics['durations']['vector_search'], 'details': {'chunks_found': metrics['counts']['chunks_retrieved'], 'similarity_max': metrics['metadata'].get('similarity_max'), 'similarity_avg': metrics['metadata'].get('similarity_avg')}})}\n\n"
 
+            # Capture top 10 chunks ranked by cosine similarity BEFORE reranking
+            pre_rerank_top10 = []
+            for i, chunk in enumerate(chunks[:10]):
+                metadata = chunk.get("metadata", {})
+                pre_rerank_top10.append({
+                    "rank": i + 1,
+                    "ref": chunk.get("sefaria_ref", ""),
+                    "content": chunk.get("content", "")[:200] + "..." if len(chunk.get("content", "")) > 200 else chunk.get("content", ""),
+                    "similarity": round(chunk.get("similarity", 0), 4),
+                    "book": metadata.get("book", ""),
+                })
+
             if not chunks:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant sources found'})}\n\n"
                 return
@@ -411,6 +423,23 @@ async def chat_stream(request: QueryRequest):
 
             # Emit rerank metrics
             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'reranking', 'duration_ms': metrics['durations']['reranking'], 'details': {'was_reranked': was_reranked, 'chunks_after': metrics['counts']['chunks_after_rerank'], 'top_rerank_score': metrics['metadata'].get('rerank_score_max')}})}\n\n"
+
+            # Capture top 10 chunks AFTER reranking for comparison
+            post_rerank_top10 = []
+            for i, chunk in enumerate(chunks[:10]):
+                metadata = chunk.get("metadata", {})
+                post_rerank_top10.append({
+                    "rank": i + 1,
+                    "ref": chunk.get("sefaria_ref", ""),
+                    "content": chunk.get("content", "")[:200] + "..." if len(chunk.get("content", "")) > 200 else chunk.get("content", ""),
+                    "similarity": round(chunk.get("similarity", 0), 4),
+                    "rerank_score": round(chunk.get("rerank_score", 0), 4) if chunk.get("rerank_score") else None,
+                    "original_rank": chunk.get("original_rank"),
+                    "book": metadata.get("book", ""),
+                })
+
+            # Emit ranking comparison data for UI testing
+            yield f"data: {json.dumps({'type': 'ranking_comparison', 'pre_rerank': pre_rerank_top10, 'post_rerank': post_rerank_top10, 'was_reranked': was_reranked})}\n\n"
 
             # SOURCES-ONLY MODE: Skip hydration and LLM, return reranked sources directly
             if sources_only:

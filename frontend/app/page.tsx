@@ -12,6 +12,7 @@ import { InlineCitation } from "@/components/InlineCitation";
 import { SourcesList } from "@/components/SourcesList";
 import { Sidebar } from "@/components/Sidebar";
 import { PerformanceMetrics, type StageMetric } from "@/components/PerformanceMetrics";
+import { ChunkRankingView } from "@/components/ChunkRankingView";
 import {
   streamChat,
   type Source,
@@ -20,6 +21,8 @@ import {
   type MetricsCounts,
   type MetricsMetadata,
   type FrontendMetrics,
+  type RankedChunk,
+  type RankingComparison,
 } from "@/utils/api";
 
 // Type for response segments (paragraphs and inline citations)
@@ -86,6 +89,10 @@ export default function Home() {
     eventCount: 0,
   });
 
+  // Ranking comparison state for testing reranker effectiveness
+  const [rankingComparison, setRankingComparison] = useState<RankingComparison | null>(null);
+  const [rankingViewVisible, setRankingViewVisible] = useState(true);
+
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -118,6 +125,9 @@ export default function Home() {
       queryStartTime,
       eventCount: 0,
     });
+
+    // Reset ranking comparison
+    setRankingComparison(null);
 
     // Transition to results view
     setIsSearching(true);
@@ -268,6 +278,17 @@ export default function Home() {
                 breakdown: event.breakdown,
                 counts: event.counts,
                 metadata: event.metadata,
+              });
+            }
+            break;
+
+          case "ranking_comparison":
+            // Store ranking comparison data for testing reranker effectiveness
+            if (event.pre_rerank && event.post_rerank) {
+              setRankingComparison({
+                pre_rerank: event.pre_rerank,
+                post_rerank: event.post_rerank,
+                was_reranked: event.was_reranked ?? false,
               });
             }
             break;
@@ -663,6 +684,17 @@ export default function Home() {
           isComplete={isComplete}
           isVisible={metricsVisible}
           onToggleVisibility={() => setMetricsVisible(!metricsVisible)}
+        />
+      )}
+
+      {/* CHUNK RANKING COMPARISON PANEL - Always shown when data is available */}
+      {isSearching && rankingComparison && (
+        <ChunkRankingView
+          preRerank={rankingComparison.pre_rerank}
+          postRerank={rankingComparison.post_rerank}
+          wasReranked={rankingComparison.was_reranked}
+          isVisible={rankingViewVisible}
+          onToggle={() => setRankingViewVisible(!rankingViewVisible)}
         />
       )}
     </div>
