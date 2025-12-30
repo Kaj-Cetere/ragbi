@@ -90,23 +90,31 @@ export default function Home() {
   });
 
   // Ranking comparison state for testing reranker effectiveness
+  const [rankingUnlocked, setRankingUnlocked] = useState(false);
   const [rankingComparison, setRankingComparison] = useState<RankingComparison | null>(null);
   const [rankingViewVisible, setRankingViewVisible] = useState(true);
 
   // Refs
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Secret code to unlock metrics: "1226"
-  const SECRET_CODE = "1226";
+  // Secret codes to unlock hidden features
+  const METRICS_SECRET_CODE = "1226";
+  const RANKING_SECRET_CODE = "770770";
 
   // Handle search submission
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) return;
 
-    // Check for secret code to unlock metrics
-    if (query.trim() === SECRET_CODE) {
+    // Check for secret codes to unlock hidden features
+    if (query.trim() === METRICS_SECRET_CODE) {
       setMetricsUnlocked(true);
       setMetricsVisible(true);
+      setInputValue("");
+      return;
+    }
+    if (query.trim() === RANKING_SECRET_CODE) {
+      setRankingUnlocked(true);
+      setRankingViewVisible(true);
       setInputValue("");
       return;
     }
@@ -687,8 +695,8 @@ export default function Home() {
         />
       )}
 
-      {/* CHUNK RANKING COMPARISON PANEL - Always shown when data is available */}
-      {isSearching && rankingComparison && (
+      {/* CHUNK RANKING COMPARISON PANEL - Only shown when unlocked with secret code */}
+      {rankingUnlocked && isSearching && rankingComparison && (
         <ChunkRankingView
           preRerank={rankingComparison.pre_rerank}
           postRerank={rankingComparison.post_rerank}
