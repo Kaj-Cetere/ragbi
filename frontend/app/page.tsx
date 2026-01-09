@@ -547,27 +547,13 @@ export default function Home() {
           className="flex-1 overflow-y-auto px-6 py-10 pb-48"
         >
           <div className="max-w-[700px] mx-auto">
-            {/* Top Bar (Question + Mode Indicator) */}
+            {/* Top Bar (Question) */}
             <div className="px-6 py-5 mb-6 -mx-6 border-b glass-bg" style={{ borderColor: 'var(--color-border)' }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Search size={18} style={{ color: 'var(--color-text-light)' }} />
-                  <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
-                    {currentQuery}
-                  </span>
-                </div>
-                {/* Mode badge */}
-                <div
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
-                  style={{
-                    backgroundColor: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'var(--color-accent-primary)',
-                    color: 'white',
-                    opacity: 0.9
-                  }}
-                >
-                  {sourcesOnlyMode ? <Zap size={12} /> : <Brain size={12} />}
-                  <span>{sourcesOnlyMode ? 'Sources Only' : 'AI Response'}</span>
-                </div>
+              <div className="flex items-center gap-3">
+                <Search size={18} style={{ color: 'var(--color-text-light)' }} />
+                <span className="font-serif text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
+                  {currentQuery}
+                </span>
               </div>
             </div>
             {/* Loader */}
