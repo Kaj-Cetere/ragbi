@@ -481,35 +481,32 @@ export default function Home() {
               </div>
 
               {/* Response Mode Toggle */}
-              <div className="flex justify-center mt-5">
-                <div
-                  className="inline-flex rounded-full p-1"
-                  style={{ backgroundColor: 'var(--color-bg-surface)', border: '1px solid var(--color-border)' }}
-                >
+              <div className="flex justify-center mt-6">
+                <div className="inline-flex gap-2">
                   <button
                     onClick={() => setSourcesOnlyMode(false)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                      !sourcesOnlyMode ? 'shadow-sm' : ''
-                    }`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
                     style={{
-                      backgroundColor: !sourcesOnlyMode ? 'var(--color-accent-primary)' : 'transparent',
-                      color: !sourcesOnlyMode ? 'white' : 'var(--color-text-muted)',
+                      backgroundColor: !sourcesOnlyMode ? 'rgba(217, 119, 87, 0.08)' : 'transparent',
+                      color: !sourcesOnlyMode ? 'var(--color-accent-primary)' : 'var(--color-text-muted)',
+                      border: !sourcesOnlyMode ? '1px solid rgba(217, 119, 87, 0.2)' : '1px solid transparent',
+                      fontWeight: !sourcesOnlyMode ? 500 : 400,
                     }}
                   >
-                    <Brain size={16} />
+                    <Brain size={15} />
                     <span>AI Response</span>
                   </button>
                   <button
                     onClick={() => setSourcesOnlyMode(true)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
-                      sourcesOnlyMode ? 'shadow-sm' : ''
-                    }`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
                     style={{
-                      backgroundColor: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'transparent',
-                      color: sourcesOnlyMode ? 'white' : 'var(--color-text-muted)',
+                      backgroundColor: sourcesOnlyMode ? 'rgba(74, 108, 111, 0.08)' : 'transparent',
+                      color: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'var(--color-text-muted)',
+                      border: sourcesOnlyMode ? '1px solid rgba(74, 108, 111, 0.2)' : '1px solid transparent',
+                      fontWeight: sourcesOnlyMode ? 500 : 400,
                     }}
                   >
-                    <Zap size={16} />
+                    <Zap size={15} />
                     <span>Sources Only</span>
                   </button>
                 </div>
