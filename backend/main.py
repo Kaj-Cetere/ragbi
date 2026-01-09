@@ -52,6 +52,9 @@ RPC_FUNCTION = "match_sefaria_chunks_gemini_contextual"
 # Chat Model (using xAI directly)
 CHAT_MODEL = "grok-4-1-fast-non-reasoning"
 
+# HyDE (Hypothetical Document Embeddings) Model
+HYDE_MODEL = "google/gemini-3-flash-preview"
+
 # RAG Settings
 TOP_K_RETRIEVE_FOR_RERANK = 50
 TOP_K_AFTER_RERANK = 13
@@ -132,6 +135,56 @@ class QueryResponse(BaseModel):
 
 
 # --- CORE RAG FUNCTIONS ---
+
+def generate_hyde_passage(query: str) -> str:
+    """
+    Generate a hypothetical halachic passage using HyDE (Hypothetical Document Embeddings).
+
+    Uses Gemini 3 Flash to generate a detailed Hebrew halachic passage that will be
+    used for embedding and reranking instead of the raw user query.
+
+    Args:
+        query: The user's original question
+
+    Returns:
+        A hypothetical halachic passage in Hebrew for vector matching
+    """
+    hyde_prompt = f"""Write a detailed halachic passage that addresses the following Jewish law question. Include relevant sources, rulings, and reasoning as would appear in the Shulchan Arukh. Answer to the best of your knowledge. Your passage will be used for vector matching for finding relevant passages in halacha, so write the passage in Hebrew, and incorporate all the halachic keywords that are relevant to the question. The passage should be no longer than 600 characters.
+
+Question: {query}
+
+Halachic Passage:"""
+
+    try:
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://kesher.ai",
+                "X-Title": "Kesher AI HyDE"
+            },
+            json={
+                "model": HYDE_MODEL,
+                "messages": [
+                    {"role": "user", "content": hyde_prompt}
+                ],
+                "max_tokens": 800,
+                "temperature": 0.3
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+        hyde_passage = data["choices"][0]["message"]["content"].strip()
+        logger.info(f"✅ HyDE passage generated ({len(hyde_passage)} chars)")
+        return hyde_passage
+    except Exception as e:
+        logger.error(f"❌ HyDE generation error: {e}")
+        # Fallback to original query if HyDE fails
+        logger.warning("⚠️ Falling back to original query for embedding")
+        return query
+
 
 def get_query_embedding(query: str) -> list[float]:
     """Generate embedding for user query using Gemini."""
@@ -354,16 +407,29 @@ async def chat_stream(request: QueryRequest):
         metrics["timestamps"]["pipeline_start"] = pipeline_start
 
         try:
-            # Step 1: Embed query
+            # Step 1a: Generate HyDE passage
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Generating hypothetical passage (HyDE)...'})}\n\n"
+            hyde_start = time.time()
+            hyde_passage = generate_hyde_passage(query)
+            hyde_end = time.time()
+            metrics["durations"]["hyde_generation"] = round((hyde_end - hyde_start) * 1000, 2)
+            metrics["counts"]["hyde_passage_length"] = len(hyde_passage)
+            # Track if we fell back to original query
+            hyde_succeeded = hyde_passage != query
+
+            # Emit HyDE metrics
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'hyde_generation', 'duration_ms': metrics['durations']['hyde_generation'], 'details': {'passage_length': len(hyde_passage), 'succeeded': hyde_succeeded}})}\n\n"
+
+            # Step 1b: Embed HyDE passage (instead of raw query)
             yield f"data: {json.dumps({'type': 'status', 'message': 'Generating embedding...'})}\n\n"
             embed_start = time.time()
-            embedding = get_query_embedding(query)
+            embedding = get_query_embedding(hyde_passage)
             embed_end = time.time()
             metrics["durations"]["embedding"] = round((embed_end - embed_start) * 1000, 2)
             metrics["counts"]["embedding_dimensions"] = len(embedding)
 
             # Emit embedding metrics
-            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'embedding', 'duration_ms': metrics['durations']['embedding'], 'details': {'dimensions': len(embedding)}})}\n\n"
+            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'embedding', 'duration_ms': metrics['durations']['embedding'], 'details': {'dimensions': len(embedding), 'input': 'hyde_passage'}})}\n\n"
 
             # Step 2: Vector search
             yield f"data: {json.dumps({'type': 'status', 'message': 'Searching sources...'})}\n\n"
@@ -399,11 +465,11 @@ async def chat_stream(request: QueryRequest):
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant sources found'})}\n\n"
                 return
 
-            # Step 3: Rerank
+            # Step 3: Rerank (using HyDE passage for better semantic matching)
             yield f"data: {json.dumps({'type': 'status', 'message': 'Reranking results...'})}\n\n"
             rerank_start = time.time()
             chunks, was_reranked = rerank_with_fallback(
-                query=query,
+                query=hyde_passage,  # Use HyDE passage instead of raw query for reranking
                 chunks=chunks,
                 model="zerank-2",
                 top_n=TOP_K_AFTER_RERANK,
@@ -624,7 +690,7 @@ async def chat_stream(request: QueryRequest):
 
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-            logger.info(f"✅ Query completed in {metrics['durations']['total_pipeline']:.0f}ms - Embed: {metrics['durations']['embedding']:.0f}ms, Search: {metrics['durations']['vector_search']:.0f}ms, Rerank: {metrics['durations']['reranking']:.0f}ms, Hydrate: {metrics['durations']['hydration']:.0f}ms, LLM: {metrics['durations']['llm_generation']:.0f}ms")
+            logger.info(f"✅ Query completed in {metrics['durations']['total_pipeline']:.0f}ms - HyDE: {metrics['durations']['hyde_generation']:.0f}ms, Embed: {metrics['durations']['embedding']:.0f}ms, Search: {metrics['durations']['vector_search']:.0f}ms, Rerank: {metrics['durations']['reranking']:.0f}ms, Hydrate: {metrics['durations']['hydration']:.0f}ms, LLM: {metrics['durations']['llm_generation']:.0f}ms")
 
         except Exception as e:
             logger.error(f"❌ Stream error: {e}")
