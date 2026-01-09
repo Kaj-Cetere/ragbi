@@ -482,35 +482,32 @@ export default function Home() {
 
               {/* Response Mode Toggle */}
               <div className="flex justify-center mt-6">
-                <div
-                  className="inline-flex gap-1 rounded-lg p-0.5"
-                  style={{ backgroundColor: 'transparent' }}
-                >
+                <div className="inline-flex gap-2">
                   <button
                     onClick={() => setSourcesOnlyMode(false)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all duration-200`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
                     style={{
-                      backgroundColor: !sourcesOnlyMode ? 'var(--color-bg-surface)' : 'transparent',
-                      color: !sourcesOnlyMode ? 'var(--color-text-main)' : 'var(--color-text-muted)',
+                      backgroundColor: !sourcesOnlyMode ? 'rgba(217, 119, 87, 0.08)' : 'transparent',
+                      color: !sourcesOnlyMode ? 'var(--color-accent-primary)' : 'var(--color-text-muted)',
+                      border: !sourcesOnlyMode ? '1px solid rgba(217, 119, 87, 0.2)' : '1px solid transparent',
                       fontWeight: !sourcesOnlyMode ? 500 : 400,
-                      opacity: !sourcesOnlyMode ? 1 : 0.6,
                     }}
                   >
-                    <Brain size={13} />
-                    <span>AI</span>
+                    <Brain size={15} />
+                    <span>AI Response</span>
                   </button>
                   <button
                     onClick={() => setSourcesOnlyMode(true)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all duration-200`}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
                     style={{
-                      backgroundColor: sourcesOnlyMode ? 'var(--color-bg-surface)' : 'transparent',
-                      color: sourcesOnlyMode ? 'var(--color-text-main)' : 'var(--color-text-muted)',
+                      backgroundColor: sourcesOnlyMode ? 'rgba(74, 108, 111, 0.08)' : 'transparent',
+                      color: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'var(--color-text-muted)',
+                      border: sourcesOnlyMode ? '1px solid rgba(74, 108, 111, 0.2)' : '1px solid transparent',
                       fontWeight: sourcesOnlyMode ? 500 : 400,
-                      opacity: sourcesOnlyMode ? 1 : 0.6,
                     }}
                   >
-                    <Zap size={13} />
-                    <span>Sources</span>
+                    <Zap size={15} />
+                    <span>Sources Only</span>
                   </button>
                 </div>
               </div>
