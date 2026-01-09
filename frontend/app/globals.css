@@ -170,6 +170,11 @@ body {
   transform: translateY(-3px);
 }
 
+.search-box input::placeholder {
+  color: var(--color-text-light);
+  opacity: 0.6;
+}
+
 /* Suggestion Pills */
 .pill {
   padding: 8px 18px;

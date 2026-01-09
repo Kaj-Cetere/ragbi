@@ -449,7 +449,7 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 1.2 }}
-              className="text-sm text-center mb-12 md:mb-16"
+              className="text-sm text-center mb-8 md:mb-10"
               style={{ color: 'var(--color-text-light)', fontWeight: 300, letterSpacing: '0.05em' }}
             >
               AI-Powered Torah Research
@@ -464,8 +464,8 @@ export default function Home() {
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch(inputValue)}
-                  placeholder="Ask anything about Jewish law..."
-                  className="flex-1 bg-transparent border-none text-lg md:text-xl outline-none font-sans font-medium placeholder:text-[var(--color-text-muted)]"
+                  placeholder="ask a question in Halacha"
+                  className="flex-1 bg-transparent border-none text-base outline-none font-sans font-normal"
                   style={{ color: 'var(--color-text-main)' }}
                 />
                 <button
@@ -478,7 +478,7 @@ export default function Home() {
               </div>
 
               {/* Response Mode Toggle */}
-              <div className="flex justify-center mt-8">
+              <div className="flex justify-center mt-6">
                 <div className="inline-flex gap-2">
                   <button
                     onClick={() => setSourcesOnlyMode(false)}
