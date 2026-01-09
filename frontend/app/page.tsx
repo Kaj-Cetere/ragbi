@@ -38,14 +38,6 @@ interface ResponseSegment {
   hebrew_highlight?: string;  // NEW: The specific Hebrew portion being translated
 }
 
-// Suggestion pills for quick searches
-const SUGGESTIONS = [
-  { emoji: "🧀", text: "Dairy on Shavuot" },
-  { emoji: "🕯️", text: "Shabbat Candles" },
-  { emoji: "🙏", text: "Modeh Ani" },
-  { emoji: "🍷", text: "Four Cups Pesach" },
-];
-
 // Metrics summary type
 interface MetricsSummary {
   total_duration_ms: number;
@@ -342,12 +334,6 @@ export default function Home() {
     }
   }, [sourcesOnlyMode]);
 
-  // Handle quick search from pills
-  const handleQuickSearch = (text: string) => {
-    setInputValue(text);
-    handleSearch(text);
-  };
-
   // Handle follow-up question
   const handleFollowUp = () => {
     if (followUpValue.trim()) {
@@ -510,19 +496,6 @@ export default function Home() {
                     <span>Sources Only</span>
                   </button>
                 </div>
-              </div>
-
-              {/* Suggestions */}
-              <div className="flex gap-3 justify-center mt-6 flex-wrap">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s.text}
-                    onClick={() => handleQuickSearch(s.text)}
-                    className="pill"
-                  >
-                    {s.text}
-                  </button>
-                ))}
               </div>
             </div>
           </motion.div>
