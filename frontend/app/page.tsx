@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, ArrowRight, Search, Send, Brain, Zap } from "lucide-react";
+import { ArrowRight, Search, Send, Brain, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 import { Loader } from "@/components/Loader";
@@ -458,7 +458,6 @@ export default function Home() {
             {/* Search Container */}
             <div className="w-full max-w-[680px] px-6">
               <div className="search-box">
-                <Sparkles style={{ color: 'var(--color-accent-secondary)' }} size={20} />
                 <input
                   type="text"
                   value={inputValue}
