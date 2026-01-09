@@ -16,7 +16,7 @@
 
   /* Text - Softer than pure black */
   --color-text-main: #2C2825;
-  --color-text-muted: #5D5550;
+  --color-text-muted: #534A45;
   --color-text-light: #8C8580;
 
   /* Accents */
@@ -26,7 +26,7 @@
   --color-highlight-bg: rgba(217, 119, 87, 0.12);
 
   /* UI Elements */
-  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border: rgba(0, 0, 0, 0.08);
   --color-glass-bg: rgba(255, 255, 255, 0.85);
 
   /* Border Radius */
@@ -109,7 +109,9 @@ html, body {
 }
 
 body {
-  background-color: var(--color-bg-body);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(217, 119, 87, 0.03), transparent 50%),
+    var(--color-bg-body);
   color: var(--color-text-main);
   font-family: var(--font-sans);
   overflow: hidden;
@@ -154,18 +156,18 @@ body {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-2xl);
-  padding: 20px 24px;
+  padding: 22px 24px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 24px rgba(44, 40, 37, 0.06), 0 2px 8px rgba(44, 40, 37, 0.04);
   transition: all 0.3s;
 }
 
 .search-box:focus-within {
-  box-shadow: var(--shadow-float);
+  box-shadow: 0 16px 48px rgba(44, 40, 37, 0.1);
   border-color: var(--color-accent-secondary);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 /* Suggestion Pills */

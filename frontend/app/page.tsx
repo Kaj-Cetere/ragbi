@@ -361,7 +361,7 @@ export default function Home() {
           >
             {/* Hero Logo - HALACHIC with AI emphasis */}
             <motion.h1
-              className="text-3xl md:text-4xl mb-10 text-center tracking-widest select-none italic"
+              className="text-2xl md:text-4xl mb-4 text-center tracking-wide md:tracking-widest select-none italic"
               style={{ fontFamily: '"Cormorant Garamond", Georgia, serif', fontWeight: 300 }}
             >
               {/* H */}
@@ -444,6 +444,17 @@ export default function Home() {
               </motion.span>
             </motion.h1>
 
+            {/* Tagline */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1.2 }}
+              className="text-sm text-center mb-12 md:mb-16"
+              style={{ color: 'var(--color-text-light)', fontWeight: 300, letterSpacing: '0.05em' }}
+            >
+              AI-Powered Torah Research
+            </motion.p>
+
             {/* Search Container */}
             <div className="w-full max-w-[680px] px-6">
               <div className="search-box">
@@ -453,8 +464,8 @@ export default function Home() {
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch(inputValue)}
-                  placeholder="What do you want to learn today?"
-                  className="flex-1 bg-transparent border-none text-lg outline-none font-sans font-medium"
+                  placeholder="Ask anything about Jewish law..."
+                  className="flex-1 bg-transparent border-none text-lg md:text-xl outline-none font-sans font-medium placeholder:text-[var(--color-text-muted)]"
                   style={{ color: 'var(--color-text-main)' }}
                 />
                 <button
@@ -467,32 +478,32 @@ export default function Home() {
               </div>
 
               {/* Response Mode Toggle */}
-              <div className="flex justify-center mt-6">
+              <div className="flex justify-center mt-8">
                 <div className="inline-flex gap-2">
                   <button
                     onClick={() => setSourcesOnlyMode(false)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
+                    className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-all duration-200 hover:scale-[1.02]"
                     style={{
-                      backgroundColor: !sourcesOnlyMode ? 'rgba(217, 119, 87, 0.08)' : 'transparent',
+                      backgroundColor: !sourcesOnlyMode ? 'rgba(217, 119, 87, 0.12)' : 'transparent',
                       color: !sourcesOnlyMode ? 'var(--color-accent-primary)' : 'var(--color-text-muted)',
-                      border: !sourcesOnlyMode ? '1px solid rgba(217, 119, 87, 0.2)' : '1px solid transparent',
-                      fontWeight: !sourcesOnlyMode ? 500 : 400,
+                      border: !sourcesOnlyMode ? '1.5px solid rgba(217, 119, 87, 0.25)' : '1px solid transparent',
+                      fontWeight: !sourcesOnlyMode ? 600 : 400,
                     }}
                   >
-                    <Brain size={15} />
+                    <Brain size={14} />
                     <span>AI Response</span>
                   </button>
                   <button
                     onClick={() => setSourcesOnlyMode(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all duration-200"
+                    className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-all duration-200 hover:scale-[1.02]"
                     style={{
-                      backgroundColor: sourcesOnlyMode ? 'rgba(74, 108, 111, 0.08)' : 'transparent',
+                      backgroundColor: sourcesOnlyMode ? 'rgba(74, 108, 111, 0.12)' : 'transparent',
                       color: sourcesOnlyMode ? 'var(--color-accent-secondary)' : 'var(--color-text-muted)',
-                      border: sourcesOnlyMode ? '1px solid rgba(74, 108, 111, 0.2)' : '1px solid transparent',
-                      fontWeight: sourcesOnlyMode ? 500 : 400,
+                      border: sourcesOnlyMode ? '1.5px solid rgba(74, 108, 111, 0.25)' : '1px solid transparent',
+                      fontWeight: sourcesOnlyMode ? 600 : 400,
                     }}
                   >
-                    <Zap size={15} />
+                    <Zap size={14} />
                     <span>Sources Only</span>
                   </button>
                 </div>
