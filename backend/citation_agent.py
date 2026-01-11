@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 CHAT_MODEL = "grok-4-1-fast-non-reasoning"
-DEBUG_CITE_TAGS = os.environ.get("DEBUG_CITE_TAGS", "").lower() in ("1", "true", "yes")
 
 
 @dataclass
@@ -298,7 +297,6 @@ async def stream_with_citations(
 
         # Paragraph buffer for streaming
         buffer = ""
-        full_response = ""  # Collect full response for debugging
 
         # Note: chat.stream() is a sync generator, use regular for loop
         for response, chunk in chat.stream():
@@ -306,7 +304,6 @@ async def stream_with_citations(
                 continue
 
             buffer += chunk.content
-            full_response += chunk.content  # Collect for debugging
 
             # Check for paragraph breaks (double newline or single newline for simpler streaming)
             # We'll emit on single newlines for responsiveness
@@ -325,11 +322,6 @@ async def stream_with_citations(
         if buffer.strip():
             async for event in parse_and_emit_paragraph(buffer.strip(), source_cache, openrouter_api_key):
                 yield event
-
-        # Debug: Analyze the full response for cite tag issues
-        if DEBUG_CITE_TAGS and full_response:
-            from debug_cite_tags import analyze_and_log_response
-            analyze_and_log_response(full_response, logger)
 
         yield {"type": "done"}
 
