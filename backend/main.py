@@ -597,7 +597,6 @@ async def chat_stream(request: QueryRequest):
             metrics["counts"]["context_length"] = len(context)
 
             llm_start = time.time()
-            actual_llm_start = None  # Track when LLM actually starts (after source cache)
             first_token_time = None
             token_count = 0
             paragraph_count = 0
@@ -613,21 +612,9 @@ async def chat_stream(request: QueryRequest):
                         xai_api_key=XAI_API_KEY,
                         openrouter_api_key=OPENROUTER_API_KEY
                     ):
-                        # Handle source cache timing event
-                        if event["type"] == "source_cache_built":
-                            source_cache_time = event.get("duration_ms", 0)
-                            metrics["durations"]["source_cache"] = source_cache_time
-                            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'source_cache', 'duration_ms': source_cache_time, 'details': {'note': 'Fetching translations from Sefaria'}})}\n\n"
-                            actual_llm_start = time.time()  # LLM starts now
-                            continue
-
                         if first_token_time is None and event["type"] in ("paragraph", "citation"):
                             first_token_time = time.time()
-                            # Calculate time to first token from actual LLM start
-                            if actual_llm_start:
-                                metrics["durations"]["time_to_first_token"] = round((first_token_time - actual_llm_start) * 1000, 2)
-                            else:
-                                metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                            metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
                             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'llm_first_token', 'duration_ms': metrics['durations']['time_to_first_token']})}\n\n"
 
                         if event["type"] == "paragraph":
@@ -665,11 +652,7 @@ async def chat_stream(request: QueryRequest):
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
             llm_end = time.time()
-            # Use actual_llm_start if available (excludes source_cache time)
-            if use_agent and actual_llm_start:
-                metrics["durations"]["llm_generation"] = round((llm_end - actual_llm_start) * 1000, 2)
-            else:
-                metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
+            metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
             metrics["counts"]["paragraphs"] = paragraph_count
             metrics["counts"]["citations"] = citation_count
             metrics["counts"]["approx_words"] = token_count
