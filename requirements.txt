@@ -7,5 +7,5 @@ requests
 openai
 httpx
 zeroentropy
-pydantic-ai
+pydantic-ai-slim[openai]
 nest-asyncio
