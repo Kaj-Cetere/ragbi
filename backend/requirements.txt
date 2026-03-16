@@ -6,7 +6,7 @@ openrouter==0.1.1
 xai-sdk
 requests==2.32.3
 pydantic==2.12.5
-pydantic-ai==1.27.0
+pydantic-ai-slim[openai]==1.27.0
 zeroentropy==0.1.0a7
 nest-asyncio==1.6.0
 httpx==0.28.1
