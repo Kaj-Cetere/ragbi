@@ -2,20 +2,79 @@
 Citation Agent for Torah AI
 
 A cleaner approach to citations that:
-1. Uses XML-style <cite> tags with optional excerpt attribute for partial translations
-2. Streams paragraph-by-paragraph (on line breaks) for smooth animations
-3. Parses and hydrates citations with actual source text and translation
-4. Supports highlighting specific Hebrew excerpts that correspond to translations
+1. Pre-fetches seifim with Hebrew text and English translation
+2. Uses XML-style <cite> tags with optional excerpt attribute for partial translations
+3. Streams paragraph-by-paragraph (on line breaks) for smooth animations
+4. Parses and hydrates citations with actual source text and translation
+5. Supports highlighting specific Hebrew excerpts that correspond to translations
 """
 
 import re
 import logging
 from typing import AsyncIterator, Optional
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
 CHAT_MODEL = "grok-4-1-fast-non-reasoning"
+
+
+@dataclass
+class SourceText:
+    """Pre-fetched source text with Hebrew and optional English."""
+    ref: str
+    hebrew: str
+    english: str
+    book: str
+    siman: Optional[int] = None
+    seif: Optional[int] = None
+    context_text: Optional[str] = None
+
+
+def build_source_cache(hydrated_chunks: list[dict], parallel: bool = True) -> dict[str, SourceText]:
+    """
+    Build a source cache entirely from retrieved chunks and hydrated commentaries.
+    Returns a dict mapping ref -> SourceText with Hebrew and English.
+    """
+    import time
+
+    cache_start = time.time()
+    cache: dict[str, SourceText] = {}
+
+    for chunk in hydrated_chunks:
+        ref = chunk.get("ref", "")
+        if not ref or ref in cache:
+            continue
+
+        cache[ref] = SourceText(
+            ref=ref,
+            hebrew=chunk.get("content", ""),
+            english="",
+            book=chunk.get("book", ""),
+            siman=chunk.get("siman"),
+            seif=chunk.get("seif"),
+            context_text=chunk.get("context_text"),
+        )
+
+        for comm in chunk.get("commentaries", []):
+            commentator = comm.get("commentator", "Commentary")
+            comm_text = comm.get("text", "")
+            comm_ref = comm.get("ref", "")
+
+            if comm_ref and comm_ref not in cache:
+                cache[comm_ref] = SourceText(
+                    ref=comm_ref,
+                    hebrew=comm_text,
+                    english="",
+                    book=commentator,
+                )
+
+    cache_time = (time.time() - cache_start) * 1000
+    logger.info(
+        f"Built local source cache with {len(cache)} entries in {cache_time:.0f}ms (parallel flag ignored)"
+    )
+    return cache
 
 
 def build_citation_prompt(query: str, context: str, source_refs: list[str]) -> tuple[str, str]:
@@ -100,24 +159,22 @@ async def stream_with_citations(
     Stream LLM response with paragraph-based buffering and citation parsing.
 
     Yields events:
+    - {"type": "source_cache_built", "duration_ms": ...} - Timing for source cache
     - {"type": "paragraph", "content": "text..."} - A complete paragraph
     - {"type": "citation", "ref": "...", "context": "...", "hebrew": "...", "english": "...", "hebrew_excerpt": "..."}
     - {"type": "done"}
     """
+    import time
     from xai_sdk import Client as XAIClient
     from xai_sdk.chat import user, system
 
-    # Step 1: Extract source refs from chunks
-    source_refs = []
-    for chunk in hydrated_chunks:
-        ref = chunk.get("ref", "")
-        if ref and ref not in source_refs:
-            source_refs.append(ref)
-        # Also collect commentary refs
-        for comm in chunk.get("commentaries", []):
-            comm_ref = comm.get("ref", "")
-            if comm_ref and comm_ref not in source_refs:
-                source_refs.append(comm_ref)
+    # Step 1: Pre-fetch all source texts
+    cache_start = time.time()
+    source_cache = build_source_cache(hydrated_chunks, parallel=True)
+    cache_duration = (time.time() - cache_start) * 1000
+    source_refs = list(source_cache.keys())
+
+    yield {"type": "source_cache_built", "duration_ms": round(cache_duration, 2)}
 
     # Step 2: Build prompts
     system_prompt, user_prompt = build_citation_prompt(query, context, source_refs)
@@ -154,13 +211,12 @@ async def stream_with_citations(
                 buffer = buffer[idx + 1:]
 
                 if paragraph:
-                    # Parse this paragraph for citations and emit
-                    async for event in parse_and_emit_paragraph(paragraph, hydrated_chunks, openrouter_api_key):
+                    async for event in parse_and_emit_paragraph(paragraph, source_cache, openrouter_api_key):
                         yield event
 
         # Emit any remaining content in buffer
         if buffer.strip():
-            async for event in parse_and_emit_paragraph(buffer.strip(), hydrated_chunks, openrouter_api_key):
+            async for event in parse_and_emit_paragraph(buffer.strip(), source_cache, openrouter_api_key):
                 yield event
 
         yield {"type": "done"}
@@ -171,9 +227,9 @@ async def stream_with_citations(
         yield {"type": "done"}
 
 
-def find_best_source_match(ref: str, hydrated_chunks: list[dict]) -> Optional[dict]:
+def find_best_source_match(ref: str, source_cache: dict[str, SourceText]) -> Optional[SourceText]:
     """
-    Find the best matching chunk for a reference that isn't in the chunks list.
+    Find the best matching source for a reference that isn't in the cache.
     Handles various reference formats intelligently.
 
     Priority:
@@ -195,35 +251,30 @@ def find_best_source_match(ref: str, hydrated_chunks: list[dict]) -> Optional[di
         # Find book name (everything before the numbers)
         book_part = re.sub(r'\s*\d+:\d+$', '', ref)
 
-        # Look for any chunk ref from the same book and siman
-        for chunk in hydrated_chunks:
-            chunk_ref = chunk.get("ref", "")
-            if chunk_ref.startswith(book_part) and f" {siman}:" in chunk_ref:
-                return chunk
+        for cached_ref, cached_source in source_cache.items():
+            if cached_ref.startswith(book_part) and f" {siman}:" in cached_ref:
+                return cached_source
 
     # Strategy 2: Match by book title alone (first available)
-    for chunk in hydrated_chunks:
-        chunk_ref = chunk.get("ref", "")
-        # Check if the book name matches
-        if "Mishnah Berurah" in ref and "Mishnah Berurah" in chunk_ref:
-            return chunk
-        if "Ba'er Hetev" in ref and "Ba'er Hetev" in chunk_ref:
-            return chunk
-        if "Shulchan Arukh" in ref and chunk_ref.startswith("Shulchan Arukh"):
-            return chunk
+    for cached_ref, cached_source in source_cache.items():
+        if "Mishnah Berurah" in ref and "Mishnah Berurah" in cached_ref:
+            return cached_source
+        if "Ba'er Hetev" in ref and "Ba'er Hetev" in cached_ref:
+            return cached_source
+        if "Shulchan Arukh" in ref and cached_ref.startswith("Shulchan Arukh"):
+            return cached_source
 
     # Strategy 3: Try partial match
-    for chunk in hydrated_chunks:
-        chunk_ref = chunk.get("ref", "")
-        if ref in chunk_ref or chunk_ref in ref:
-            return chunk
+    for cached_ref, cached_source in source_cache.items():
+        if ref in cached_ref or cached_ref in ref:
+            return cached_source
 
     return None
 
 
 async def parse_and_emit_paragraph(
     text: str,
-    hydrated_chunks: list[dict],
+    source_cache: dict[str, SourceText],
     openrouter_api_key: str
 ) -> AsyncIterator[dict]:
     """
@@ -250,64 +301,37 @@ async def parse_and_emit_paragraph(
         ref = match.group(1)
         hebrew_highlight = match.group(2) or match.group(3)
 
-        # Look up the source chunk
-        source_chunk = None
+        source = source_cache.get(ref)
 
-        # First, try to find exact match in main chunks
-        for chunk in hydrated_chunks:
-            if chunk.get("ref") == ref:
-                source_chunk = chunk
-                break
+        if not source:
+            source = find_best_source_match(ref, source_cache)
 
-        # If not found, check commentaries
-        if not source_chunk:
-            for chunk in hydrated_chunks:
-                for comm in chunk.get("commentaries", []):
-                    if comm.get("ref") == ref:
-                        # Create a pseudo-chunk for the commentary
-                        source_chunk = {
-                            "ref": comm.get("ref", ""),
-                            "content": comm.get("text", ""),
-                            "book": comm.get("commentator", "Commentary"),
-                            "context_text": None
-                        }
-                        break
-                if source_chunk:
-                    break
-
-        # If still not found, try fallback matching
-        if not source_chunk:
-            source_chunk = find_best_source_match(ref, hydrated_chunks)
-
-        if source_chunk:
-            # Create translation request
+        if source:
             translation_request = TranslationRequest(
-                hebrew_text=source_chunk.get("content", ""),
+                hebrew_text=source.hebrew,
                 hebrew_highlight=hebrew_highlight,
                 source_ref=ref,
-                book=source_chunk.get("book", ""),
-                context_text=source_chunk.get("context_text")
+                book=source.book,
+                context_text=getattr(source, "context_text", None),
             )
 
-            # Get translation (non-streaming)
             translation_result = await translate_source(
                 translation_request,
-                openrouter_api_key
+                openrouter_api_key,
             )
 
-            # Emit citation with translation
             yield {
                 "type": "citation",
                 "ref": ref,
                 "context": translation_result.translation if translation_result.success else "",
-                "hebrew": source_chunk.get("content", ""),
-                "english": "",  # No Sefaria translation anymore
-                "book": source_chunk.get("book", ""),
+                "hebrew": source.hebrew,
+                "english": source.english,
+                "book": source.book,
                 "hebrew_highlight": hebrew_highlight,
-                "translation_success": translation_result.success
+                "translation_success": translation_result.success,
             }
         else:
-            logger.warning(f"Citation ref not found in chunks: {ref}")
+            logger.warning(f"Citation ref not found in cache: {ref}")
             yield {"type": "paragraph", "content": f"[Citation: {ref}]"}
 
         last_end = match.end()

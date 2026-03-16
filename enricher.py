@@ -1,86 +1,118 @@
-import requests
 import logging
+import os
+import re
+from functools import lru_cache
+from html import unescape
+
+from dotenv import load_dotenv
+from supabase import Client, create_client
+
 from config_commentaries import MAIN_COMMENTATORS
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+
+COMMENTARY_REF_NUMBER_RE = re.compile(r"\d+")
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+@lru_cache(maxsize=1)
+def get_supabase_client() -> Client | None:
+    """Create a cached Supabase client for commentary hydration."""
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_KEY")
+
+    if not url or not key:
+        logger.error("❌ Missing SUPABASE_URL or SUPABASE_KEY; commentary hydration unavailable")
+        return None
+
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Supabase client for commentary hydration: {e}")
+        return None
+
+
+def get_allowed_commentators(book_title: str) -> list[str]:
+    """Return configured commentator names for a base book."""
+    for key, val in MAIN_COMMENTATORS.items():
+        if book_title.startswith(key):
+            return val
+    return []
+
+
+def strip_html(text: str) -> str:
+    """Remove inline HTML tags stored in cached commentary text."""
+    return unescape(HTML_TAG_RE.sub("", text or "")).strip()
+
+
+def commentary_sort_key(commentary: dict, allowed: list[str]) -> tuple:
+    """Sort by configured commentator order, then natural numeric ref order."""
+    commentator = commentary.get("commentator", "")
+    commentary_ref = commentary.get("ref", "")
+    ref_numbers = tuple(int(part) for part in COMMENTARY_REF_NUMBER_RE.findall(commentary_ref))
+    commentator_index = allowed.index(commentator) if commentator in allowed else len(allowed)
+    return commentator_index, ref_numbers, commentary_ref
+
+
 def fetch_commentaries_for_ref(sefaria_ref, book_title):
     """
-    Fetches commentaries from Sefaria API and filters for configured meforshim.
-    
+    Fetch cached commentaries from Supabase and filter for configured meforshim.
+
     Args:
         sefaria_ref: Reference string (e.g., "Shulchan Arukh, Orach Chayim 1:1")
         book_title: Book title from metadata (e.g., "Shulchan Arukh, Orach Chayim")
-    
+
     Returns:
         List of dicts with 'commentator' and 'text' keys
     """
-    url = f"https://www.sefaria.org/api/texts/{sefaria_ref}?commentary=1&context=0"
-    
-    logger.debug(f"🔍 Fetching commentaries for: {sefaria_ref}")
-    
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            logger.warning(f"⚠️ API returned status {response.status_code} for {sefaria_ref}")
-            return []
-        data = response.json()
-        logger.debug(f"✅ Successfully fetched API response for {sefaria_ref}")
-    except requests.exceptions.Timeout:
-        logger.error(f"❌ Timeout fetching {sefaria_ref}")
-        return []
-    except requests.exceptions.RequestException as e:
-        logger.error(f"❌ Request error for {sefaria_ref}: {e}")
-        return []
-    except ValueError as e:
-        logger.error(f"❌ JSON decode error for {sefaria_ref}: {e}")
-        return []
+    logger.debug(f"🔍 Fetching cached commentaries for: {sefaria_ref}")
 
-    raw_comments = data.get("commentary", [])
-    logger.debug(f"📊 Found {len(raw_comments)} total commentaries in response")
-    
-    # Find allowed list for this book
-    allowed = []
-    for key, val in MAIN_COMMENTATORS.items():
-        if book_title.startswith(key):
-            allowed = val
-            logger.debug(f"📖 Matched book '{book_title}' to config key '{key}'")
-            logger.debug(f"   Allowed meforshim: {allowed}")
-            break
-            
+    allowed = get_allowed_commentators(book_title)
     if not allowed:
         logger.warning(f"⚠️ No configured meforshim found for book: {book_title}")
         return []
 
+    supabase = get_supabase_client()
+    if supabase is None:
+        return []
+
+    try:
+        response = (
+            supabase.table("sefaria_commentaries")
+            .select("commentator,text_he,commentary_ref")
+            .eq("base_ref", sefaria_ref)
+            .execute()
+        )
+        raw_comments = response.data or []
+        logger.debug(f"📊 Found {len(raw_comments)} cached commentaries for {sefaria_ref}")
+    except Exception as e:
+        logger.error(f"❌ Supabase query error for {sefaria_ref}: {e}")
+        return []
+
     filtered = []
     for c in raw_comments:
-        # Handle collectiveTitle which can be a dict or string
-        collective_title = c.get("collectiveTitle")
-        if isinstance(collective_title, dict):
-            title = collective_title.get("en", "")
-        else:
-            title = collective_title or ""
-        
+        title = c.get("commentator", "")
         logger.debug(f"   Checking commentary: {title}")
-        
+
         if title in allowed:
-            # Clean HTML from Hebrew text
-            he_text = c.get("he", "").replace("<b>","").replace("</b>","")
+            he_text = strip_html(c.get("text_he", ""))
             if he_text:
                 filtered.append({
                     "commentator": title,
                     "text": he_text,
-                    "ref": c.get("ref", "")  # Include the actual Sefaria ref
+                    "ref": c.get("commentary_ref", ""),
                 })
-                logger.debug(f"   ✅ Included: {title} ref={c.get('ref', '')} ({len(he_text)} chars)")
+                logger.debug(
+                    f"   ✅ Included cached commentary: {title} ref={c.get('commentary_ref', '')} ({len(he_text)} chars)"
+                )
             else:
                 logger.debug(f"   ⚠️ Skipped {title} - no Hebrew text")
         else:
             logger.debug(f"   ❌ Not in allowed list: {title}")
-            
-    logger.info(f"✅ Hydration complete for {sefaria_ref}: {len(filtered)} commentaries found")
-    
-    # Sort by order defined in config
-    filtered.sort(key=lambda x: allowed.index(x['commentator']) if x['commentator'] in allowed else 99)
-    
+
+    filtered.sort(key=lambda x: commentary_sort_key(x, allowed))
+
+    logger.info(f"✅ Cached hydration complete for {sefaria_ref}: {len(filtered)} commentaries found")
     return filtered

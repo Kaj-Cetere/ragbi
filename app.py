@@ -170,9 +170,9 @@ def search_chunks(embedding: list[float], rpc_function: str, match_count: int = 
 
 def hydrate_chunks(chunks: list[dict], hydrate_count: int = TOP_K_HYDRATE) -> list[dict]:
     """
-    Hydrate top chunks with commentaries from Sefaria API.
+    Hydrate top chunks with cached commentaries from Supabase.
     Only the top N chunks get commentary hydration.
-    Uses concurrent requests for 5x faster performance.
+    Uses concurrent requests for faster performance.
     """
     import concurrent.futures
     
@@ -194,7 +194,7 @@ def hydrate_chunks(chunks: list[dict], hydrate_count: int = TOP_K_HYDRATE) -> li
         
         logger.info(f"📖 Fetching commentaries for chunk {i+1}/{hydrate_count}: {sefaria_ref}")
         
-        # Fetch commentaries for this chunk
+        # Fetch cached commentaries for this chunk
         commentaries = fetch_commentaries_for_ref(sefaria_ref, book_title)
         chunk_time = time.time() - chunk_start
         
@@ -255,7 +255,7 @@ def hydrate_chunks(chunks: list[dict], hydrate_count: int = TOP_K_HYDRATE) -> li
     total_time = time.time() - start_time
     total_commentaries = sum(len(chunk.get("commentaries", [])) for chunk in hydrated)
     logger.info(f"🎯 Concurrent hydration completed in {total_time:.3f}s, fetched {total_commentaries} total commentaries")
-    logger.info(f"⚡ Speedup: ~{hydrate_count}x faster than sequential")
+    logger.info("⚡ Concurrent hydration completed using cached commentary lookups")
     
     return hydrated
 
@@ -446,7 +446,7 @@ with st.sidebar:
     **How it works:**
     1. Your question is embedded using Qwen-3
     2. Similar text chunks are retrieved from Supabase
-    3. Top chunks are hydrated with commentaries from Sefaria API
+    3. Top chunks are hydrated with cached commentaries from Supabase
     4. An LLM generates a response based on the context
     
     **Available Commentaries:**
@@ -682,7 +682,7 @@ if prompt := st.chat_input("Ask a question about Halakha..."):
                             rerank_time = time.time() - rerank_start
                             logger.info(f"🎯 Reranking {'succeeded' if was_reranked else 'failed/skipped'}, took {rerank_time:.3f}s")
                         
-                        # Step 4: Hydrate chunks with commentaries from Sefaria
+                        # Step 4: Hydrate chunks with cached commentaries
                         hydrate_count = rerank_hydrate_count if enable_reranking else TOP_K_HYDRATE
                         hydration_start = time.time()
                         hydrated = hydrate_chunks(chunks, hydrate_count=hydrate_count)

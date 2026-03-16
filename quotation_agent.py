@@ -117,7 +117,7 @@ def fetch_commentary_text(
                 if commentator_name.lower() in comm.get('commentator', '').lower():
                     return comm.get('text', ''), comm.get('commentator', commentator_name)
     
-    # If not in chunks, try to fetch from Sefaria API
+    # If not in chunks, fall back to commentary hydration lookup
     try:
         book_title = ""
         if "Orach Chayim" in base_ref:

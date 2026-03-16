@@ -8,9 +8,11 @@ import sys
 import json
 import asyncio
 import logging
+import re
 import time
 from typing import Optional, AsyncIterator
 from contextlib import asynccontextmanager
+from html import unescape
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +39,8 @@ load_dotenv()
 # --- LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 # --- CONFIGURATION ---
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -597,6 +601,7 @@ async def chat_stream(request: QueryRequest):
             metrics["counts"]["context_length"] = len(context)
 
             llm_start = time.time()
+            actual_llm_start = None
             first_token_time = None
             token_count = 0
             paragraph_count = 0
@@ -612,9 +617,19 @@ async def chat_stream(request: QueryRequest):
                         xai_api_key=XAI_API_KEY,
                         openrouter_api_key=OPENROUTER_API_KEY
                     ):
+                        if event["type"] == "source_cache_built":
+                            source_cache_time = event.get("duration_ms", 0)
+                            metrics["durations"]["source_cache"] = source_cache_time
+                            yield f"data: {json.dumps({'type': 'metrics', 'stage': 'source_cache', 'duration_ms': source_cache_time, 'details': {'note': 'Building local citation source cache'}})}\n\n"
+                            actual_llm_start = time.time()
+                            continue
+
                         if first_token_time is None and event["type"] in ("paragraph", "citation"):
                             first_token_time = time.time()
-                            metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
+                            if actual_llm_start:
+                                metrics["durations"]["time_to_first_token"] = round((first_token_time - actual_llm_start) * 1000, 2)
+                            else:
+                                metrics["durations"]["time_to_first_token"] = round((first_token_time - llm_start) * 1000, 2)
                             yield f"data: {json.dumps({'type': 'metrics', 'stage': 'llm_first_token', 'duration_ms': metrics['durations']['time_to_first_token']})}\n\n"
 
                         if event["type"] == "paragraph":
@@ -652,7 +667,10 @@ async def chat_stream(request: QueryRequest):
                     yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
 
             llm_end = time.time()
-            metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
+            if use_agent and actual_llm_start:
+                metrics["durations"]["llm_generation"] = round((llm_end - actual_llm_start) * 1000, 2)
+            else:
+                metrics["durations"]["llm_generation"] = round((llm_end - llm_start) * 1000, 2)
             metrics["counts"]["paragraphs"] = paragraph_count
             metrics["counts"]["citations"] = citation_count
             metrics["counts"]["approx_words"] = token_count
@@ -694,48 +712,177 @@ async def chat_stream(request: QueryRequest):
 @app.get("/api/sefaria/text/{ref:path}")
 async def get_sefaria_text(ref: str, context: int = 1):
     """
-    Proxy endpoint to fetch text from Sefaria API.
+    Fetch source text for the sidebar from local Supabase tables.
     Returns the chapter/section with the target verse highlighted.
     """
     try:
-        # Extract chapter ref (remove verse number for context)
         parts = ref.split(':')
         chapter_ref = parts[0] if len(parts) > 1 else ref
         verse_num = int(parts[-1]) if len(parts) > 1 and parts[-1].isdigit() else None
-        
-        url = f"https://www.sefaria.org/api/texts/{chapter_ref}?context={context}"
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        
-        he_texts = data.get("he", [])
-        en_texts = data.get("text", [])
-        
-        if isinstance(he_texts, str):
-            he_texts = [he_texts]
-        if isinstance(en_texts, str):
-            en_texts = [en_texts]
-        
-        verses = []
-        for i in range(max(len(he_texts), len(en_texts))):
-            verses.append({
-                "number": i + 1,
-                "he": he_texts[i] if i < len(he_texts) else "",
-                "en": en_texts[i] if i < len(en_texts) else "",
-                "isTarget": (i + 1) == verse_num if verse_num else False
-            })
-        
+
+        def clean_html(text: str) -> str:
+            return unescape(HTML_TAG_RE.sub("", text or "")).strip()
+
+        def natural_numbers(text: str) -> tuple[int, ...]:
+            return tuple(int(part) for part in re.findall(r"\d+", text))
+
+        def parse_base_chapter(chapter: str) -> tuple[str, int] | None:
+            match = re.match(r"^(.*)\s+(\d+)$", chapter)
+            if not match:
+                return None
+            return match.group(1), int(match.group(2))
+
+        def parse_commentary_chapter(chapter: str) -> tuple[str, Optional[str], int, Optional[int]] | None:
+            match = re.match(r"^(?P<commentator>.+?) on (?P<base_book>Shulchan Arukh, .+?) (?P<siman>\d+)(?::(?P<order>\d+))?$", chapter)
+            if match:
+                return (
+                    match.group("commentator"),
+                    match.group("base_book"),
+                    int(match.group("siman")),
+                    int(match.group("order")) if match.group("order") else None,
+                )
+
+            match = re.match(r"^(?P<commentator>.+?) (?P<siman>\d+)(?::(?P<order>\d+))?$", chapter)
+            if match:
+                return (
+                    match.group("commentator"),
+                    None,
+                    int(match.group("siman")),
+                    int(match.group("order")) if match.group("order") else None,
+                )
+
+            return None
+
+        def extract_commentary_parts(commentary_ref: str, commentator: str) -> tuple[int, int, int]:
+            suffix = commentary_ref[len(commentator):].strip()
+            numbers = [int(part) for part in re.findall(r"\d+", suffix)]
+            if len(numbers) == 2:
+                return numbers[0], numbers[1], 1
+            if len(numbers) >= 3:
+                return numbers[0], numbers[1], numbers[2]
+            raise ValueError(f"Unsupported commentary ref format: {commentary_ref}")
+
+        if chapter_ref.startswith("Shulchan Arukh, "):
+            parsed = parse_base_chapter(chapter_ref)
+            if not parsed:
+                raise HTTPException(status_code=404, detail=f"Unsupported base ref format: {ref}")
+
+            book_title, siman = parsed
+            result = (
+                supabase_client.table("sefaria_text_chunks")
+                .select("sefaria_ref,metadata,content")
+                .contains("metadata", {"book": book_title, "siman": siman})
+                .execute()
+            )
+
+            rows = result.data or []
+            rows = [
+                row for row in rows
+                if (row.get("metadata", {}) or {}).get("book") == book_title
+                and (row.get("metadata", {}) or {}).get("siman") == siman
+            ]
+            rows.sort(key=lambda row: (row.get("metadata", {}) or {}).get("seif", 0))
+
+            verses = [
+                {
+                    "number": (row.get("metadata", {}) or {}).get("seif", idx + 1),
+                    "he": row.get("content", ""),
+                    "en": "",
+                    "isTarget": ((row.get("metadata", {}) or {}).get("seif") == verse_num) if verse_num else False,
+                }
+                for idx, row in enumerate(rows)
+            ]
+
+            return {
+                "ref": chapter_ref,
+                "title": book_title,
+                "heTitle": "",
+                "verses": verses,
+                "targetVerse": verse_num,
+            }
+
+        parsed_commentary = parse_commentary_chapter(chapter_ref)
+        if not parsed_commentary:
+            raise HTTPException(status_code=404, detail=f"Unsupported commentary ref format: {ref}")
+
+        commentator, base_book, siman, order = parsed_commentary
+        query = (
+            supabase_client.table("sefaria_commentaries")
+            .select("commentary_ref,commentator,text_he,base_book,siman")
+            .eq("commentator", commentator)
+            .eq("siman", siman)
+        )
+        if base_book:
+            query = query.eq("base_book", base_book)
+
+        result = query.execute()
+        rows = result.data or []
+
+        if order is None:
+            grouped: dict[int, list[tuple[int, str]]] = {}
+            for row in rows:
+                commentary_ref = row.get("commentary_ref", "")
+                try:
+                    row_siman, row_order, row_segment = extract_commentary_parts(commentary_ref, commentator)
+                except ValueError:
+                    continue
+                if row_siman != siman:
+                    continue
+                grouped.setdefault(row_order, []).append((row_segment, clean_html(row.get("text_he", ""))))
+
+            verses = []
+            for row_order in sorted(grouped):
+                segments = [text for _, text in sorted(grouped[row_order], key=lambda item: item[0]) if text]
+                verses.append({
+                    "number": row_order,
+                    "he": "<br/>".join(segments),
+                    "en": "",
+                    "isTarget": row_order == verse_num if verse_num else False,
+                })
+        else:
+            prefix = f"{chapter_ref}:"
+            matching_rows = [
+                row for row in rows
+                if row.get("commentary_ref") == chapter_ref or str(row.get("commentary_ref", "")).startswith(prefix)
+            ]
+
+            grouped_segments: dict[int, str] = {}
+            for row in matching_rows:
+                commentary_ref = row.get("commentary_ref", "")
+                try:
+                    row_siman, row_order, row_segment = extract_commentary_parts(commentary_ref, commentator)
+                except ValueError:
+                    continue
+                if row_siman == siman and row_order == order:
+                    grouped_segments[row_segment] = clean_html(row.get("text_he", ""))
+
+            verses = [
+                {
+                    "number": segment_num,
+                    "he": grouped_segments[segment_num],
+                    "en": "",
+                    "isTarget": segment_num == verse_num if verse_num else False,
+                }
+                for segment_num in sorted(grouped_segments)
+            ]
+
+        if not verses:
+            raise HTTPException(status_code=404, detail=f"No local text found for {ref}")
+
+        title = f"{commentator} on {base_book}" if base_book else commentator
         return {
             "ref": chapter_ref,
-            "title": data.get("indexTitle", chapter_ref),
-            "heTitle": data.get("heIndexTitle", ""),
+            "title": title,
+            "heTitle": "",
             "verses": verses,
-            "targetVerse": verse_num
+            "targetVerse": verse_num,
         }
-        
+
     except Exception as e:
-        logger.error(f"❌ Sefaria API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch from Sefaria: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        logger.error(f"❌ Local source fetch error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch local source text: {e}")
 
 
 if __name__ == "__main__":
